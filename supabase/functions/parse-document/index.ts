@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAdmin } from "../_shared/auth.ts";
+import { embedFile } from "../_shared/embeddings.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -207,10 +208,30 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // If regenerating embedding, just return success (we don't use embeddings anymore)
+    // If regenerating embedding only, re-chunk + re-embed current content_text
     if (regenerateEmbedding) {
+      const { data: rec } = await supabase
+        .from('knowledge_files')
+        .select('content_text')
+        .eq('id', fileId)
+        .maybeSingle();
+      const apiKey = Deno.env.get("LOVABLE_API_KEY");
+      if (rec?.content_text && apiKey) {
+        try {
+          const r = await embedFile(supabase, fileId, rec.content_text, apiKey);
+          return new Response(
+            JSON.stringify({ success: true, chunks: r.chunks }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } catch (e) {
+          return new Response(
+            JSON.stringify({ success: false, error: e instanceof Error ? e.message : String(e) }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
       return new Response(
-        JSON.stringify({ success: true, message: "Operation completed" }),
+        JSON.stringify({ success: true, message: "Nothing to embed" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -290,6 +311,19 @@ serve(async (req) => {
     if (updateError) {
       console.error("Update error:", updateError);
       throw new Error(`Failed to update database: ${updateError.message}`);
+    }
+
+    // Auto-generate chunk embeddings (best-effort, do not fail upload on embedding error)
+    if (extractedText.length > 0) {
+      const apiKey = Deno.env.get("LOVABLE_API_KEY");
+      if (apiKey) {
+        try {
+          const r = await embedFile(supabase, fileId, extractedText, apiKey);
+          console.log(`Embedded ${r.chunks} chunks for ${fileName}`);
+        } catch (e) {
+          console.error("Embedding failed (non-fatal):", e);
+        }
+      }
     }
 
     return new Response(
