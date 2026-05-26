@@ -311,67 +311,147 @@ async function getFallbackKnowledge(
   }
 }
 
-// Get knowledge context - ALWAYS tries to return some knowledge context
-async function getKnowledgeContext(
-  supabase: any, 
-  userQuery: string
-): Promise<{ context: string; sources: Array<{ fileName: string; similarity: number; tags: string[]; id: string }> }> {
+// Vector-based search over knowledge_chunks (precision channel)
+async function vectorSearch(
+  supabase: any,
+  query: string,
+  apiKey: string,
+): Promise<Array<{ id: string; file_id: string; file_name: string; chunk_content: string; tags: string[]; similarity: number; chunk_index: number }>> {
   try {
-    // Try keyword search first
-    const keywordResults = await keywordSearch(supabase, userQuery);
-    
-    if (keywordResults.length > 0) {
-      const sources = keywordResults.map((r, index) => ({
-        id: r.id,
-        fileName: r.file_name,
-        similarity: r.similarity,
-        tags: r.tags || [],
+    const vec = await embedQuery(query, apiKey);
+    if (!vec) return [];
+    const { data, error } = await supabase.rpc("match_knowledge_chunks", {
+      query_embedding: vec,
+      match_threshold: 0.25,
+      match_count: 12,
+    });
+    if (error) {
+      console.error("vectorSearch RPC error:", error);
+      return [];
+    }
+    console.log(`Vector search returned ${data?.length || 0} chunks`);
+    return data || [];
+  } catch (e) {
+    console.error("vectorSearch error:", e);
+    return [];
+  }
+}
+
+// Get knowledge context - hybrid: TF-IDF keyword search + chunk-level vector search, fused via RRF
+async function getKnowledgeContext(
+  supabase: any,
+  userQuery: string,
+  apiKey: string,
+): Promise<{ context: string; sources: Array<{ fileName: string; similarity: number; tags: string[]; id: string; index?: number; snippet?: string }> }> {
+  try {
+    // Run both channels in parallel
+    const [keywordResults, vectorChunks] = await Promise.all([
+      keywordSearch(supabase, userQuery),
+      vectorSearch(supabase, userQuery, apiKey),
+    ]);
+
+    // ---- RRF fusion at file level ----
+    // For vector channel, aggregate chunks per file: take best chunk per file as the file's hit.
+    const bestChunkPerFile = new Map<string, typeof vectorChunks[number]>();
+    for (const c of vectorChunks) {
+      const prev = bestChunkPerFile.get(c.file_id);
+      if (!prev || c.similarity > prev.similarity) bestChunkPerFile.set(c.file_id, c);
+    }
+    const vectorRanked = Array.from(bestChunkPerFile.values())
+      .sort((a, b) => b.similarity - a.similarity);
+
+    const K = 60; // RRF constant
+    type FileHit = {
+      id: string;
+      file_name: string;
+      tags: string[];
+      bestSnippet: string;       // most relevant chunk (vector) or content head (kw)
+      content_text?: string;     // for keyword channel context
+      rrf: number;
+      vectorSim?: number;
+      keywordSim?: number;
+    };
+    const fused = new Map<string, FileHit>();
+
+    keywordResults.forEach((r, i) => {
+      const cur = fused.get(r.id) ?? {
+        id: r.id, file_name: r.file_name, tags: r.tags || [],
+        bestSnippet: r.content_text.substring(0, 600), content_text: r.content_text, rrf: 0,
+      };
+      cur.rrf += 1 / (K + i + 1);
+      cur.keywordSim = r.similarity;
+      cur.content_text = r.content_text;
+      fused.set(r.id, cur);
+    });
+
+    vectorRanked.forEach((c, i) => {
+      const cur = fused.get(c.file_id) ?? {
+        id: c.file_id, file_name: c.file_name, tags: c.tags || [],
+        bestSnippet: c.chunk_content, rrf: 0,
+      };
+      cur.rrf += 1.4 / (K + i + 1); // slight weight to vector for precision
+      cur.vectorSim = c.similarity;
+      // Prefer the matching chunk as snippet (more focused than head-of-doc)
+      cur.bestSnippet = c.chunk_content;
+      fused.set(c.file_id, cur);
+    });
+
+    const merged = Array.from(fused.values()).sort((a, b) => b.rrf - a.rrf).slice(0, 5);
+
+    if (merged.length > 0) {
+      console.log("Fused top sources:", merged.map(m => ({
+        file: m.file_name,
+        rrf: m.rrf.toFixed(4),
+        kw: m.keywordSim ? (m.keywordSim * 100).toFixed(0) + "%" : "-",
+        vec: m.vectorSim ? (m.vectorSim * 100).toFixed(0) + "%" : "-",
+      })));
+
+      // Effective similarity for display: prefer vector score, else keyword
+      const sources = merged.map((m, index) => ({
+        id: m.id,
+        fileName: m.file_name,
+        similarity: m.vectorSim ?? m.keywordSim ?? 0.5,
+        tags: m.tags,
         index: index + 1,
-        snippet: r.content_text.substring(0, 200).replace(/\n/g, ' '),
+        snippet: m.bestSnippet.substring(0, 200).replace(/\n/g, ' '),
       }));
 
-      const contents = keywordResults.map((r, index) => {
-        const tags = r.tags?.length > 0 ? `[标签: ${r.tags.join(', ')}]` : '';
-        const scoreLabel = `[匹配度: ${Math.round(r.similarity * 100)}%]`;
-        const truncated = r.content_text.length > 3000 
-          ? r.content_text.substring(0, 3000) + '...' 
-          : r.content_text;
-        return `【来源[${index + 1}]: ${r.file_name}】${tags} ${scoreLabel}\n${truncated}`;
+      const contents = merged.map((m, index) => {
+        const tags = m.tags?.length > 0 ? `[标签: ${m.tags.join(', ')}]` : '';
+        const sim = m.vectorSim ?? m.keywordSim ?? 0.5;
+        const scoreLabel = `[匹配度: ${Math.round(sim * 100)}%]`;
+        // Use the matched chunk content if available, else doc head
+        const body = m.bestSnippet.length > 2500
+          ? m.bestSnippet.substring(0, 2500) + '...'
+          : m.bestSnippet;
+        return `【来源[${index + 1}]: ${m.file_name}】${tags} ${scoreLabel}\n${body}`;
       });
-      
-      console.log(`Returning ${sources.length} keyword matched sources with similarities:`, 
-        sources.map(s => `${s.fileName}: ${(s.similarity * 100).toFixed(0)}%`));
+
       return {
-        context: `\n\n以下是与问题相关的知识库内容：\n\n${contents.join('\n\n---\n\n')}`,
+        context: `\n\n以下是与问题最相关的知识库片段（已做语义+关键词融合检索）：\n\n${contents.join('\n\n---\n\n')}`,
         sources,
       };
     }
 
     // Fallback: get recent knowledge files
-    console.log("No keyword matches, getting fallback knowledge");
+    console.log("No fused matches, using fallback");
     const fallbackKnowledge = await getFallbackKnowledge(supabase, 3);
-    
     if (fallbackKnowledge.length > 0) {
       const contents = fallbackKnowledge.map(r => {
         const tags = r.tags?.length > 0 ? `[标签: ${r.tags.join(', ')}]` : '';
-        const truncated = r.content_text.length > 2000 
-          ? r.content_text.substring(0, 2000) + '...' 
+        const truncated = r.content_text.length > 2000
+          ? r.content_text.substring(0, 2000) + '...'
           : r.content_text;
         return `【${r.file_name}】${tags} [参考资料]\n${truncated}`;
       });
-
       return {
         context: `\n\n以下是知识库中的参考资料（供参考）：\n\n${contents.join('\n\n---\n\n')}`,
         sources: fallbackKnowledge.map(r => ({
-          id: r.id,
-          fileName: r.file_name,
-          similarity: 0.5, // Default similarity for fallback sources
-          tags: r.tags || [],
+          id: r.id, fileName: r.file_name, similarity: 0.5, tags: r.tags || [],
         })),
       };
     }
 
-    console.log("No knowledge found in database");
     return { context: '', sources: [] };
   } catch (e) {
     console.error("Error in getKnowledgeContext:", e);
