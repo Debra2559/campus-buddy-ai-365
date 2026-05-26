@@ -509,7 +509,7 @@ serve(async (req) => {
     }
 
     // Get knowledge base context using keyword search
-    const { context: knowledgeContext, sources } = await getKnowledgeContext(supabase, latestUserMessage);
+    const { context: knowledgeContext, sources } = await getKnowledgeContext(supabase, latestUserMessage, LOVABLE_API_KEY);
     console.log("Knowledge context length:", knowledgeContext.length, "Sources:", sources.length);
 
     // Build system prompt with file context if present
