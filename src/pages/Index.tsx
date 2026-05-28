@@ -56,6 +56,8 @@ const Index = () => {
   const assistantContentRef = useRef<string>("");
   const assistantMessageIdRef = useRef<string | null>(null);
   const assistantSourcesRef = useRef<KnowledgeSource[]>([]);
+  const streamFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamBufferRef = useRef<string>("");
 
   // Load user profile
   useEffect(() => {
@@ -143,10 +145,23 @@ const Index = () => {
 
       assistantContentRef.current = "";
       assistantSourcesRef.current = [];
+      streamBufferRef.current = "";
+      if (streamFlushTimerRef.current) {
+        clearTimeout(streamFlushTimerRef.current);
+        streamFlushTimerRef.current = null;
+      }
 
       // Create placeholder for assistant message
       const tempAssistantId = `temp-ai-${Date.now()}`;
       assistantMessageIdRef.current = tempAssistantId;
+
+      const flushStreamBuffer = () => {
+        streamFlushTimerRef.current = null;
+        if (!streamBufferRef.current) return;
+        assistantContentRef.current += streamBufferRef.current;
+        streamBufferRef.current = "";
+        updateLocalMessage(targetConvId!, tempAssistantId, assistantContentRef.current, assistantSourcesRef.current);
+      };
 
       // Get conversation history for context (exclude temp messages)
       const historyMessages = currentConv?.messages.filter(m => !m.id.startsWith('temp-')) || [];
@@ -159,25 +174,53 @@ const Index = () => {
         messages: apiMessages,
         files: files,
         onDelta: (chunk) => {
-          assistantContentRef.current += chunk;
-          updateLocalMessage(targetConvId!, tempAssistantId, assistantContentRef.current, assistantSourcesRef.current);
+          streamBufferRef.current += chunk;
+          if (!streamFlushTimerRef.current) {
+            streamFlushTimerRef.current = setTimeout(flushStreamBuffer, 32);
+          }
         },
         onSources: (sources) => {
           assistantSourcesRef.current = sources;
           updateLocalMessage(targetConvId!, tempAssistantId, assistantContentRef.current, sources);
         },
         onDone: async () => {
-          // Remove temp message first
-          updateLocalMessage(targetConvId!, tempAssistantId, '');
+          if (streamFlushTimerRef.current) {
+            clearTimeout(streamFlushTimerRef.current);
+            streamFlushTimerRef.current = null;
+          }
+          flushStreamBuffer();
           
           // Save the final assistant message to database
           if (assistantContentRef.current.trim()) {
-            await addMessage(targetConvId!, 'assistant', assistantContentRef.current, assistantSourcesRef.current);
+            const savedAssistant = await addMessage(targetConvId!, 'assistant', assistantContentRef.current, assistantSourcesRef.current);
+            if (savedAssistant) {
+              setConversations((prev) =>
+                prev.map((conv) => {
+                  if (conv.id !== targetConvId) return conv;
+                  const messagesWithoutDuplicate = conv.messages.filter((msg) => msg.id !== savedAssistant.id);
+                  return {
+                    ...conv,
+                    messages: messagesWithoutDuplicate.map((msg) =>
+                      msg.id === tempAssistantId
+                        ? { ...savedAssistant, sources: assistantSourcesRef.current }
+                        : msg
+                    ),
+                  };
+                })
+              );
+            }
+          } else {
+            updateLocalMessage(targetConvId!, tempAssistantId, '');
           }
           setIsTyping(false);
           assistantMessageIdRef.current = null;
         },
         onError: (error) => {
+          if (streamFlushTimerRef.current) {
+            clearTimeout(streamFlushTimerRef.current);
+            streamFlushTimerRef.current = null;
+          }
+          streamBufferRef.current = "";
           updateLocalMessage(targetConvId!, tempAssistantId, '');
           setIsTyping(false);
           toast.error(error);
