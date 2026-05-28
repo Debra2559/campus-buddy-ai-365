@@ -94,15 +94,22 @@ function calculateSimilarity(
   return { score: totalScore, matchedKeywords, details };
 }
 
-// Normalize score to 0-1 range using sigmoid-like function
-function normalizeScore(score: number, maxScore: number): number {
-  if (maxScore <= 0) return 0.5;
-  // Use a scaled sigmoid to map scores to 0.3-0.98 range
-  // This ensures even low matches show some relevance, and high matches don't hit 100%
-  const normalized = score / maxScore;
-  const sigmoid = 1 / (1 + Math.exp(-5 * (normalized - 0.5)));
-  return 0.3 + sigmoid * 0.68; // Range: 0.3 to 0.98
+// Calibrated similarity for keyword channel.
+// Returns conservative values: weak matches stay low, only very strong matches approach ~0.75.
+// Heavily weighted by coverage (how many query keywords actually matched).
+function calibratedKeywordSimilarity(
+  score: number,
+  maxScore: number,
+  coverageRatio: number,
+): number {
+  if (maxScore <= 0 || score <= 0) return 0;
+  const rel = Math.min(1, score / maxScore); // 0..1 relative to top doc
+  // Square-root softens the curve; coverage gates the ceiling.
+  const base = Math.sqrt(rel) * 0.6;  // up to 0.6 for top doc
+  const covWeighted = base * (0.4 + 0.6 * coverageRatio); // <40% coverage → strongly damped
+  return Math.max(0, Math.min(0.78, covWeighted));
 }
+
 
 // Chinese text segmentation - extract meaningful terms from Chinese text
 function segmentChinese(text: string): string[] {
