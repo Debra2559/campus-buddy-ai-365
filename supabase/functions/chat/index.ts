@@ -174,11 +174,13 @@ async function keywordSearch(
 ): Promise<Array<{ file_name: string; content_text: string; tags: string[]; score: number; similarity: number; id: string; matchDetails: string }>> {
   try {
     // Get all files with content
+    // Get ALL files with content (override Supabase default 1000 cap)
     const { data: files, error } = await supabase
       .from('knowledge_files')
       .select('id, file_name, content_text, tags')
       .eq('status', 'ready')
-      .not('content_text', 'is', null);
+      .not('content_text', 'is', null)
+      .limit(10000);
 
     if (error || !files) {
       console.error("Keyword search error:", error);
