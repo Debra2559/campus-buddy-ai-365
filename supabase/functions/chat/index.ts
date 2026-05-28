@@ -408,12 +408,16 @@ async function getKnowledgeContext(
 ): Promise<{ context: string; sources: Array<{ fileName: string; similarity: number; tags: string[]; id: string; index?: number; snippet?: string; url?: string }> }> {
 
   try {
-    // Run keyword + vector channels AND HZAU web search in parallel
+    // Decide whether to invoke HZAU web search (it's slow ~2-5s; only run when relevant)
+    const needsWeb = /华农|华中农业|hzau|官网|官方|通知|公告|招生|校历|学校|招办|教务/i.test(userQuery);
+
+    // Run keyword + vector channels in parallel; web search only if relevant
     const [keywordResults, vectorChunks, webResults] = await Promise.all([
       keywordSearch(supabase, userQuery),
       vectorSearch(supabase, userQuery, apiKey),
-      webSearchHZAU(userQuery),
+      needsWeb ? webSearchHZAU(userQuery) : Promise.resolve([] as Awaited<ReturnType<typeof webSearchHZAU>>),
     ]);
+
 
 
     // ---- RRF fusion at file level ----
