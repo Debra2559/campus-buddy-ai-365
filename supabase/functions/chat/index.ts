@@ -408,11 +408,13 @@ async function getKnowledgeContext(
 ): Promise<{ context: string; sources: Array<{ fileName: string; similarity: number; tags: string[]; id: string; index?: number; snippet?: string; url?: string }> }> {
 
   try {
-    // Run both channels in parallel
-    const [keywordResults, vectorChunks] = await Promise.all([
+    // Run keyword + vector channels AND HZAU web search in parallel
+    const [keywordResults, vectorChunks, webResults] = await Promise.all([
       keywordSearch(supabase, userQuery),
       vectorSearch(supabase, userQuery, apiKey),
+      webSearchHZAU(userQuery),
     ]);
+
 
     // ---- RRF fusion at file level ----
     // For vector channel, aggregate chunks per file: take best chunk per file as the file's hit.
