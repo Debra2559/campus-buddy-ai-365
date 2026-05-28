@@ -408,12 +408,16 @@ async function getKnowledgeContext(
 ): Promise<{ context: string; sources: Array<{ fileName: string; similarity: number; tags: string[]; id: string; index?: number; snippet?: string; url?: string }> }> {
 
   try {
-    // Run keyword + vector channels AND HZAU web search in parallel
+    // Decide whether to invoke HZAU web search (it's slow ~2-5s; only run when relevant)
+    const needsWeb = /华农|华中农业|hzau|官网|官方|通知|公告|招生|校历|学校|招办|教务/i.test(userQuery);
+
+    // Run keyword + vector channels in parallel; web search only if relevant
     const [keywordResults, vectorChunks, webResults] = await Promise.all([
       keywordSearch(supabase, userQuery),
       vectorSearch(supabase, userQuery, apiKey),
-      webSearchHZAU(userQuery),
+      needsWeb ? webSearchHZAU(userQuery) : Promise.resolve([] as Awaited<ReturnType<typeof webSearchHZAU>>),
     ]);
+
 
 
     // ---- RRF fusion at file level ----
@@ -523,44 +527,32 @@ async function getKnowledgeContext(
 
       return {
         context: `\n\n以下是与问题最相关的内容（含知识库语义+关键词融合检索，以及华中农业大学官方网站检索）：\n\n${contents.join('\n\n---\n\n')}`,
-        sources,
+    // No fused knowledge matches: only return web results (if any). Never fabricate fallback sources.
+    if (webResults.length > 0) {
+      const webSources: any[] = [];
+      const webContents: string[] = [];
+      webResults.forEach((w, i) => {
+        const idx = i + 1;
+        webSources.push({
+          id: `web:${w.url}`,
+          fileName: `[华农官网] ${w.title}`,
+          similarity: Math.max(0.55, 0.85 - i * 0.1),
+          tags: ['华中农业大学', '官方网站'],
+          index: idx,
+          snippet: w.snippet,
+          url: w.url,
+        });
+        webContents.push(`【来源[${idx}]: ${w.title}】[来自华中农业大学官网: ${w.url}]\n${w.markdown}`);
+      });
+      return {
+        context: `\n\n以下是来自华中农业大学官方网站的相关内容：\n\n${webContents.join('\n\n---\n\n')}`,
+        sources: webSources,
       };
     }
 
-    // Fallback: get recent knowledge files
-    console.log("No fused matches, using fallback");
-    const fallbackKnowledge = await getFallbackKnowledge(supabase, 3);
-    const fallbackSources: any[] = fallbackKnowledge.map((r, i) => ({
-      id: r.id, fileName: r.file_name, similarity: 0.5, tags: r.tags || [], index: i + 1,
-    }));
-    const fallbackContents: string[] = fallbackKnowledge.map((r, i) => {
-      const tags = r.tags?.length > 0 ? `[标签: ${r.tags.join(', ')}]` : '';
-      const truncated = r.content_text.length > 2000
-        ? r.content_text.substring(0, 2000) + '...'
-        : r.content_text;
-      return `【来源[${i + 1}]: ${r.file_name}】${tags} [参考资料]\n${truncated}`;
-    });
+    console.log("No matches found in knowledge base or web");
+    return { context: '', sources: [] };
 
-    // Append HZAU web sources here too
-    const baseIdx2 = fallbackSources.length;
-    webResults.forEach((w, i) => {
-      const idx = baseIdx2 + i + 1;
-      fallbackSources.push({
-        id: `web:${w.url}`,
-        fileName: `[华农官网] ${w.title}`,
-        similarity: Math.max(0.55, 0.85 - i * 0.1),
-        tags: ['华中农业大学', '官方网站'],
-        index: idx,
-        snippet: w.snippet,
-        url: w.url,
-      });
-      fallbackContents.push(`【来源[${idx}]: ${w.title}】[来自华中农业大学官网: ${w.url}]\n${w.markdown}`);
-    });
-
-    if (fallbackSources.length > 0) {
-      return {
-        context: `\n\n以下是参考资料（知识库片段 + 华中农业大学官方网站检索）：\n\n${fallbackContents.join('\n\n---\n\n')}`,
-        sources: fallbackSources,
       };
     }
 
@@ -682,7 +674,8 @@ ${fileContext}`;
         stream: true,
         max_tokens: 2048,
       }),
-    });
+        model: "google/gemini-2.5-flash",
+
 
     if (!response.ok) {
       const errorText = await response.text();
