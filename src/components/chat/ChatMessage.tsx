@@ -421,9 +421,9 @@ function ChatMessageComponent({ message, previousUserContent, onToggleFavorite, 
                     <div key={index} className={baseCls}>{inner}</div>
                   );
                 })}
+              </div>
+            )}
 
-          </div>
-        )}
 
 
         {!isUser && (
