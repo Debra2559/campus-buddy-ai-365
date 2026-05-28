@@ -664,7 +664,7 @@ ${fileContext}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
@@ -672,8 +672,9 @@ ${fileContext}`;
         stream: true,
         max_tokens: 2048,
       }),
-        model: "google/gemini-2.5-flash",
+    });
 
+    if (!response.ok) {
 
     if (!response.ok) {
       const errorText = await response.text();
