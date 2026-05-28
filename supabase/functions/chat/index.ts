@@ -289,7 +289,8 @@ async function keywordSearch(
       })));
     }
     
-    return results.slice(0, 5);
+    return filtered.slice(0, 5);
+
   } catch (e) {
     console.error("Error in keyword search:", e);
     return [];
