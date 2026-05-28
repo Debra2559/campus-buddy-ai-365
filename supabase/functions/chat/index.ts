@@ -490,14 +490,14 @@ async function getKnowledgeContext(
         return `【来源[${index + 1}]: ${m.file_name}】${tags} ${scoreLabel}\n${body}`;
       });
 
-      // Append HZAU web sources (continue index numbering)
+      // Append cached HZAU web sources (continue index numbering)
       const baseIdx = sources.length;
       webResults.forEach((w, i) => {
         const idx = baseIdx + i + 1;
         sources.push({
           id: `web:${w.url}`,
           fileName: `[华农官网] ${w.title}`,
-          similarity: Math.max(0.55, 0.85 - i * 0.1),
+          similarity: Math.min(0.95, Math.max(0.5, w.similarity)),
           tags: ['华中农业大学', '官方网站'],
           index: idx,
           snippet: w.snippet,
@@ -507,8 +507,12 @@ async function getKnowledgeContext(
       });
 
       return {
-        context: `\n\n以下是与问题最相关的内容（含知识库语义+关键词融合检索，以及华中农业大学官方网站检索）：\n\n${contents.join('\n\n---\n\n')}`,
-    // No fused knowledge matches: only return web results (if any). Never fabricate fallback sources.
+        context: `\n\n以下是与问题最相关的内容（知识库语义+关键词融合检索，并含华农官网缓存）：\n\n${contents.join('\n\n---\n\n')}`,
+        sources,
+      };
+    }
+
+    // No knowledge base matches: only return cached web results if any. Never fabricate fallback sources.
     if (webResults.length > 0) {
       const webSources: any[] = [];
       const webContents: string[] = [];
@@ -517,7 +521,7 @@ async function getKnowledgeContext(
         webSources.push({
           id: `web:${w.url}`,
           fileName: `[华农官网] ${w.title}`,
-          similarity: Math.max(0.55, 0.85 - i * 0.1),
+          similarity: Math.min(0.95, Math.max(0.5, w.similarity)),
           tags: ['华中农业大学', '官方网站'],
           index: idx,
           snippet: w.snippet,
@@ -526,23 +530,19 @@ async function getKnowledgeContext(
         webContents.push(`【来源[${idx}]: ${w.title}】[来自华中农业大学官网: ${w.url}]\n${w.markdown}`);
       });
       return {
-        context: `\n\n以下是来自华中农业大学官方网站的相关内容：\n\n${webContents.join('\n\n---\n\n')}`,
+        context: `\n\n以下是来自华中农业大学官方网站缓存的相关内容：\n\n${webContents.join('\n\n---\n\n')}`,
         sources: webSources,
       };
     }
 
-    console.log("No matches found in knowledge base or web");
-    return { context: '', sources: [] };
-
-      };
-    }
-
+    console.log("No matches found in knowledge base or web cache");
     return { context: '', sources: [] };
   } catch (e) {
     console.error("Error in getKnowledgeContext:", e);
     return { context: '', sources: [] };
   }
 }
+
 
 
 serve(async (req) => {
