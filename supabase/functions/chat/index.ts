@@ -418,11 +418,23 @@ async function getKnowledgeContext(
         vec: m.vectorSim ? (m.vectorSim * 100).toFixed(0) + "%" : "-",
       })));
 
-      // Effective similarity for display: prefer vector score, else keyword
+      // Effective similarity for display: combine vector + keyword.
+      // - Both: weighted blend (vector dominant) — confirms relevance from two channels.
+      // - Vector only: use vector cosine directly (already calibrated 0-1).
+      // - Keyword only: use calibrated keyword similarity, but cap lower since no semantic confirmation.
+      const effectiveSim = (m: typeof merged[number]): number => {
+        const v = m.vectorSim;
+        const k = m.keywordSim;
+        if (v != null && k != null) return Math.min(0.98, v * 0.75 + k * 0.25 + 0.03);
+        if (v != null) return v;
+        if (k != null) return Math.min(0.6, k); // keyword-only: cap at 60%
+        return 0.3;
+      };
+
       const sources = merged.map((m, index) => ({
         id: m.id,
         fileName: m.file_name,
-        similarity: m.vectorSim ?? m.keywordSim ?? 0.5,
+        similarity: effectiveSim(m),
         tags: m.tags,
         index: index + 1,
         snippet: m.bestSnippet.substring(0, 200).replace(/\n/g, ' '),
@@ -430,7 +442,7 @@ async function getKnowledgeContext(
 
       const contents = merged.map((m, index) => {
         const tags = m.tags?.length > 0 ? `[标签: ${m.tags.join(', ')}]` : '';
-        const sim = m.vectorSim ?? m.keywordSim ?? 0.5;
+        const sim = effectiveSim(m);
         const scoreLabel = `[匹配度: ${Math.round(sim * 100)}%]`;
         // Use the matched chunk content if available, else doc head
         const body = m.bestSnippet.length > 2500
@@ -438,6 +450,7 @@ async function getKnowledgeContext(
           : m.bestSnippet;
         return `【来源[${index + 1}]: ${m.file_name}】${tags} ${scoreLabel}\n${body}`;
       });
+
 
       return {
         context: `\n\n以下是与问题最相关的知识库片段（已做语义+关键词融合检索）：\n\n${contents.join('\n\n---\n\n')}`,
