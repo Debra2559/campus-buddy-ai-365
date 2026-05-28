@@ -676,7 +676,6 @@ ${fileContext}`;
 
     if (!response.ok) {
 
-    if (!response.ok) {
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
       
