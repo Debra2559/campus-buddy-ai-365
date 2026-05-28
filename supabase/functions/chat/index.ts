@@ -594,9 +594,26 @@ serve(async (req) => {
       fileContext = `\n\n用户上传的文件内容：\n${fileContents.join('\n\n---\n\n')}`;
     }
 
-    // Get knowledge base context using keyword search
+    // Get knowledge base context using hybrid search
     const { context: knowledgeContext, sources } = await getKnowledgeContext(supabase, latestUserMessage, LOVABLE_API_KEY);
     console.log("Knowledge context length:", knowledgeContext.length, "Sources:", sources.length);
+
+    // Log knowledge gaps when we couldn't find anything relevant (fire-and-forget)
+    if (sources.length === 0 && latestUserMessage && latestUserMessage.length >= 4) {
+      const reason = "no_match";
+      (async () => {
+        try {
+          await supabase.rpc("log_knowledge_gap", {
+            _query: latestUserMessage.substring(0, 500),
+            _user_id: auth.userId ?? null,
+            _reason: reason,
+          });
+        } catch (e) {
+          console.error("log_knowledge_gap failed:", e);
+        }
+      })();
+    }
+
 
     // Build system prompt with file context if present
     let systemPrompt = `你是一位友善、专业的校园AI辅导员。
