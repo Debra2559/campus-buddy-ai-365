@@ -261,9 +261,9 @@ serve(async (req) => {
     const ext = fileName.split('.').pop()?.toLowerCase();
     
     let extractedText = '';
-    
+
     console.log(`Extracting text from ${ext} file...`);
-    
+
     switch (ext) {
       case 'docx':
         extractedText = await extractTextFromDocx(arrayBuffer);
@@ -280,7 +280,6 @@ serve(async (req) => {
         extractedText = new TextDecoder('utf-8').decode(arrayBuffer);
         break;
       default:
-        // Try to decode as text for unknown types
         try {
           extractedText = new TextDecoder('utf-8').decode(arrayBuffer);
         } catch {
@@ -295,6 +294,48 @@ serve(async (req) => {
     }
 
     console.log(`Extracted ${extractedText.length} characters from ${fileName}`);
+
+    // Compute content hash (normalized) to detect duplicate uploads
+    let contentHash: string | null = null;
+    if (extractedText.length > 0) {
+      const normalized = extractedText.replace(/\s+/g, '').toLowerCase();
+      const buf = new TextEncoder().encode(normalized);
+      const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+      contentHash = Array.from(new Uint8Array(hashBuf))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const { data: dup } = await supabase
+        .from('knowledge_files')
+        .select('id, file_name')
+        .eq('content_hash', contentHash)
+        .neq('id', fileId)
+        .limit(1)
+        .maybeSingle();
+
+      if (dup) {
+        console.log(`Duplicate detected: ${dup.file_name} (id=${dup.id})`);
+        await supabase.storage.from('knowledge').remove([filePath]).catch(() => {});
+        await supabase.from('knowledge_files').delete().eq('id', fileId);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            duplicate: true,
+            duplicateOf: dup.file_name,
+            error: `检测到重复内容，已与 "${dup.file_name}" 相同，本次上传已自动过滤`,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      }
+    }
+
+    // Update database with extracted text
+    const updateData: any = {
+      content_text: extractedText,
+      content_hash: contentHash,
+      status: extractedText.length > 0 ? 'ready' : 'error',
+      updated_at: new Date().toISOString(),
+    };
+
 
     // Update database with extracted text
     const updateData: any = { 

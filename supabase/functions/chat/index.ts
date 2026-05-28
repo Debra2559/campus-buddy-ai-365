@@ -94,15 +94,22 @@ function calculateSimilarity(
   return { score: totalScore, matchedKeywords, details };
 }
 
-// Normalize score to 0-1 range using sigmoid-like function
-function normalizeScore(score: number, maxScore: number): number {
-  if (maxScore <= 0) return 0.5;
-  // Use a scaled sigmoid to map scores to 0.3-0.98 range
-  // This ensures even low matches show some relevance, and high matches don't hit 100%
-  const normalized = score / maxScore;
-  const sigmoid = 1 / (1 + Math.exp(-5 * (normalized - 0.5)));
-  return 0.3 + sigmoid * 0.68; // Range: 0.3 to 0.98
+// Calibrated similarity for keyword channel.
+// Returns conservative values: weak matches stay low, only very strong matches approach ~0.75.
+// Heavily weighted by coverage (how many query keywords actually matched).
+function calibratedKeywordSimilarity(
+  score: number,
+  maxScore: number,
+  coverageRatio: number,
+): number {
+  if (maxScore <= 0 || score <= 0) return 0;
+  const rel = Math.min(1, score / maxScore); // 0..1 relative to top doc
+  // Square-root softens the curve; coverage gates the ceiling.
+  const base = Math.sqrt(rel) * 0.6;  // up to 0.6 for top doc
+  const covWeighted = base * (0.4 + 0.6 * coverageRatio); // <40% coverage → strongly damped
+  return Math.max(0, Math.min(0.78, covWeighted));
 }
+
 
 // Chinese text segmentation - extract meaningful terms from Chinese text
 function segmentChinese(text: string): string[] {
@@ -246,27 +253,31 @@ async function keywordSearch(
           .sort((a, b) => b.weight - a.weight)
           .map(d => `${d.keyword}(${d.weight.toFixed(1)})`)
           .join(', ');
-        
+
         results.push({
           id: file.id,
           file_name: file.file_name,
           content_text: file.content_text,
           tags: file.tags || [],
           score,
-          similarity: 0, // Will be normalized later
+          similarity: 0, // Will be calibrated later
           matchDetails,
-        });
+          coverage: matchedKeywords.length / Math.max(1, topKeywords.length),
+        } as any);
       }
     }
 
     // Sort by score descending
     results.sort((a, b) => b.score - a.score);
-    
-    // Normalize scores to similarity (0-1)
+
+    // Calibrate scores to similarity (conservative, coverage-weighted)
     const maxScore = results.length > 0 ? results[0].score : 1;
-    for (const result of results) {
-      result.similarity = normalizeScore(result.score, maxScore);
+    for (const result of results as any[]) {
+      result.similarity = calibratedKeywordSimilarity(result.score, maxScore, result.coverage ?? 0);
     }
+    // Drop low-confidence results to avoid 30%+ noise
+    const filtered = (results as any[]).filter(r => r.similarity >= 0.25);
+
     
     console.log(`Keyword search found ${results.length} matching files`);
     if (results.length > 0) {
@@ -278,7 +289,8 @@ async function keywordSearch(
       })));
     }
     
-    return results.slice(0, 5);
+    return filtered.slice(0, 5);
+
   } catch (e) {
     console.error("Error in keyword search:", e);
     return [];
@@ -322,7 +334,7 @@ async function vectorSearch(
     if (!vec) return [];
     const { data, error } = await supabase.rpc("match_knowledge_chunks", {
       query_embedding: vec,
-      match_threshold: 0.25,
+      match_threshold: 0.35,
       match_count: 12,
     });
     if (error) {
@@ -406,11 +418,23 @@ async function getKnowledgeContext(
         vec: m.vectorSim ? (m.vectorSim * 100).toFixed(0) + "%" : "-",
       })));
 
-      // Effective similarity for display: prefer vector score, else keyword
+      // Effective similarity for display: combine vector + keyword.
+      // - Both: weighted blend (vector dominant) — confirms relevance from two channels.
+      // - Vector only: use vector cosine directly (already calibrated 0-1).
+      // - Keyword only: use calibrated keyword similarity, but cap lower since no semantic confirmation.
+      const effectiveSim = (m: typeof merged[number]): number => {
+        const v = m.vectorSim;
+        const k = m.keywordSim;
+        if (v != null && k != null) return Math.min(0.98, v * 0.75 + k * 0.25 + 0.03);
+        if (v != null) return v;
+        if (k != null) return Math.min(0.6, k); // keyword-only: cap at 60%
+        return 0.3;
+      };
+
       const sources = merged.map((m, index) => ({
         id: m.id,
         fileName: m.file_name,
-        similarity: m.vectorSim ?? m.keywordSim ?? 0.5,
+        similarity: effectiveSim(m),
         tags: m.tags,
         index: index + 1,
         snippet: m.bestSnippet.substring(0, 200).replace(/\n/g, ' '),
@@ -418,7 +442,7 @@ async function getKnowledgeContext(
 
       const contents = merged.map((m, index) => {
         const tags = m.tags?.length > 0 ? `[标签: ${m.tags.join(', ')}]` : '';
-        const sim = m.vectorSim ?? m.keywordSim ?? 0.5;
+        const sim = effectiveSim(m);
         const scoreLabel = `[匹配度: ${Math.round(sim * 100)}%]`;
         // Use the matched chunk content if available, else doc head
         const body = m.bestSnippet.length > 2500
@@ -426,6 +450,7 @@ async function getKnowledgeContext(
           : m.bestSnippet;
         return `【来源[${index + 1}]: ${m.file_name}】${tags} ${scoreLabel}\n${body}`;
       });
+
 
       return {
         context: `\n\n以下是与问题最相关的知识库片段（已做语义+关键词融合检索）：\n\n${contents.join('\n\n---\n\n')}`,
