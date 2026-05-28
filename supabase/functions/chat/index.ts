@@ -349,12 +349,64 @@ async function vectorSearch(
   }
 }
 
+// Search HZAU official websites via Firecrawl, return scraped markdown snippets
+async function webSearchHZAU(
+  userQuery: string,
+): Promise<Array<{ url: string; title: string; snippet: string; markdown: string }>> {
+  const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
+  if (!FIRECRAWL_API_KEY) {
+    console.log('FIRECRAWL_API_KEY not configured, skipping web search');
+    return [];
+  }
+  try {
+    const query = `${userQuery} site:hzau.edu.cn`;
+    const res = await fetch('https://api.firecrawl.dev/v2/search', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        limit: 3,
+        lang: 'zh',
+        country: 'cn',
+        scrapeOptions: { formats: ['markdown'], onlyMainContent: true },
+      }),
+    });
+    if (!res.ok) {
+      console.error('Firecrawl search failed:', res.status, await res.text().catch(() => ''));
+      return [];
+    }
+    const json = await res.json();
+    const items: any[] = json?.data?.web || json?.data || [];
+    const results = items
+      .filter((it) => typeof it?.url === 'string' && it.url.includes('hzau.edu.cn'))
+      .slice(0, 3)
+      .map((it) => {
+        const md: string = it.markdown || it.description || '';
+        return {
+          url: it.url as string,
+          title: (it.title || it.url) as string,
+          snippet: md.replace(/\s+/g, ' ').substring(0, 200),
+          markdown: md.substring(0, 2000),
+        };
+      });
+    console.log(`Firecrawl HZAU search returned ${results.length} results`);
+    return results;
+  } catch (e) {
+    console.error('webSearchHZAU error:', e);
+    return [];
+  }
+}
+
 // Get knowledge context - hybrid: TF-IDF keyword search + chunk-level vector search, fused via RRF
 async function getKnowledgeContext(
   supabase: any,
   userQuery: string,
   apiKey: string,
-): Promise<{ context: string; sources: Array<{ fileName: string; similarity: number; tags: string[]; id: string; index?: number; snippet?: string }> }> {
+): Promise<{ context: string; sources: Array<{ fileName: string; similarity: number; tags: string[]; id: string; index?: number; snippet?: string; url?: string }> }> {
+
   try {
     // Run both channels in parallel
     const [keywordResults, vectorChunks] = await Promise.all([
