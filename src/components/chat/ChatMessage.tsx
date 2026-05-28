@@ -384,34 +384,44 @@ function ChatMessageComponent({ message, previousUserContent, onToggleFavorite, 
             
             {showSources && (
               <div className="mt-2 overflow-hidden rounded-xl border border-border/40 bg-gradient-to-b from-muted/20 to-muted/40 backdrop-blur-sm">
-                {message.sources!.map((source, index) => (
-                  <div 
-                    key={index} 
-                    className={cn(
-                      "flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-muted/30",
-                      index !== message.sources!.length - 1 && "border-b border-border/30"
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-bold text-primary">{source.index || index + 1}</span>
+                {message.sources!.map((source, index) => {
+                  const isLast = index === message.sources!.length - 1;
+                  const inner = (
+                    <>
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-bold text-primary">{source.index || index + 1}</span>
+                        </div>
+                        <span className={cn(
+                          "text-sm truncate",
+                          source.url ? "text-primary hover:underline" : "text-foreground/80"
+                        )}>{source.fileName}</span>
                       </div>
-                      <span className="text-sm truncate text-foreground/80">{source.fileName}</span>
-                    </div>
-                    <div className={cn(
-                      "text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0",
-                      source.similarity >= 0.9 
-                        ? "bg-green-500/10 text-green-600" 
-                        : source.similarity >= 0.7 
-                          ? "bg-primary/10 text-primary" 
-                          : "bg-muted text-muted-foreground"
-                    )}>
-                      {(source.similarity * 100).toFixed(0)}%
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                      <div className={cn(
+                        "text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0",
+                        source.similarity >= 0.9
+                          ? "bg-green-500/10 text-green-600"
+                          : source.similarity >= 0.7
+                            ? "bg-primary/10 text-primary"
+                            : "bg-muted text-muted-foreground"
+                      )}>
+                        {(source.similarity * 100).toFixed(0)}%
+                      </div>
+                    </>
+                  );
+                  const baseCls = cn(
+                    "flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-muted/30",
+                    !isLast && "border-b border-border/30"
+                  );
+                  return source.url ? (
+                    <a key={index} href={source.url} target="_blank" rel="noopener noreferrer" className={baseCls}>
+                      {inner}
+                    </a>
+                  ) : (
+                    <div key={index} className={baseCls}>{inner}</div>
+                  );
+                })}
+
           </div>
         )}
 
