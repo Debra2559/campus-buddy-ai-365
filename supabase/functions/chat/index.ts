@@ -349,56 +349,38 @@ async function vectorSearch(
   }
 }
 
-// Search HZAU official websites via Firecrawl, return scraped markdown snippets
-async function webSearchHZAU(
+// Search cached HZAU web pages via vector similarity over public.web_knowledge.
+// Much faster than calling Firecrawl on each chat turn — the crawler keeps this table fresh.
+async function webKnowledgeSearch(
+  supabase: any,
   userQuery: string,
-): Promise<Array<{ url: string; title: string; snippet: string; markdown: string }>> {
-  const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
-  if (!FIRECRAWL_API_KEY) {
-    console.log('FIRECRAWL_API_KEY not configured, skipping web search');
-    return [];
-  }
+  apiKey: string,
+): Promise<Array<{ url: string; title: string; snippet: string; markdown: string; similarity: number }>> {
   try {
-    const query = `${userQuery} site:hzau.edu.cn`;
-    const res = await fetch('https://api.firecrawl.dev/v2/search', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query,
-        limit: 3,
-        lang: 'zh',
-        country: 'cn',
-        scrapeOptions: { formats: ['markdown'], onlyMainContent: true },
-      }),
+    const vec = await embedQuery(userQuery, apiKey);
+    if (!vec) return [];
+    const { data, error } = await supabase.rpc("match_web_knowledge", {
+      query_embedding: vec,
+      match_threshold: 0.4,
+      match_count: 3,
     });
-    if (!res.ok) {
-      console.error('Firecrawl search failed:', res.status, await res.text().catch(() => ''));
+    if (error) {
+      console.error("webKnowledgeSearch RPC error:", error);
       return [];
     }
-    const json = await res.json();
-    const items: any[] = json?.data?.web || json?.data || [];
-    const results = items
-      .filter((it) => typeof it?.url === 'string' && it.url.includes('hzau.edu.cn'))
-      .slice(0, 3)
-      .map((it) => {
-        const md: string = it.markdown || it.description || '';
-        return {
-          url: it.url as string,
-          title: (it.title || it.url) as string,
-          snippet: md.replace(/\s+/g, ' ').substring(0, 200),
-          markdown: md.substring(0, 2000),
-        };
-      });
-    console.log(`Firecrawl HZAU search returned ${results.length} results`);
-    return results;
+    return (data || []).map((w: any) => ({
+      url: w.url,
+      title: w.title,
+      snippet: (w.summary || w.content || "").substring(0, 200).replace(/\s+/g, " "),
+      markdown: (w.content || "").substring(0, 2000),
+      similarity: w.similarity ?? 0.6,
+    }));
   } catch (e) {
-    console.error('webSearchHZAU error:', e);
+    console.error("webKnowledgeSearch error:", e);
     return [];
   }
 }
+
 
 // Get knowledge context - hybrid: TF-IDF keyword search + chunk-level vector search, fused via RRF
 async function getKnowledgeContext(
