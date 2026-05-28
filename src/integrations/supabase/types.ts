@@ -372,6 +372,54 @@ export type Database = {
           },
         ]
       }
+      knowledge_gaps: {
+        Row: {
+          created_at: string
+          id: string
+          last_seen_at: string
+          normalized_query: string
+          occurrences: number
+          reason: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          suggested_topic: string | null
+          updated_at: string
+          user_id: string | null
+          user_query: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          normalized_query: string
+          occurrences?: number
+          reason?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          suggested_topic?: string | null
+          updated_at?: string
+          user_id?: string | null
+          user_query: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          normalized_query?: string
+          occurrences?: number
+          reason?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          suggested_topic?: string | null
+          updated_at?: string
+          user_id?: string | null
+          user_query?: string
+        }
+        Relationships: []
+      }
       knowledge_usage: {
         Row: {
           conversation_id: string | null
@@ -536,6 +584,48 @@ export type Database = {
         }
         Relationships: []
       }
+      web_knowledge: {
+        Row: {
+          content: string
+          created_at: string
+          embedding: string | null
+          id: string
+          last_crawled_at: string
+          source: string
+          summary: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          last_crawled_at?: string
+          source?: string
+          summary?: string | null
+          tags?: string[]
+          title: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          last_crawled_at?: string
+          source?: string
+          summary?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -549,6 +639,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      log_knowledge_gap: {
+        Args: { _query: string; _reason: string; _user_id: string }
+        Returns: undefined
+      }
       match_knowledge_chunks: {
         Args: {
           match_count?: number
@@ -577,6 +671,23 @@ export type Database = {
           id: string
           similarity: number
           tags: string[]
+        }[]
+      }
+      match_web_knowledge: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          id: string
+          similarity: number
+          source: string
+          summary: string
+          tags: string[]
+          title: string
+          url: string
         }[]
       }
     }

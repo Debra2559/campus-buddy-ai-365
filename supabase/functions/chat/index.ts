@@ -349,56 +349,38 @@ async function vectorSearch(
   }
 }
 
-// Search HZAU official websites via Firecrawl, return scraped markdown snippets
-async function webSearchHZAU(
+// Search cached HZAU web pages via vector similarity over public.web_knowledge.
+// Much faster than calling Firecrawl on each chat turn — the crawler keeps this table fresh.
+async function webKnowledgeSearch(
+  supabase: any,
   userQuery: string,
-): Promise<Array<{ url: string; title: string; snippet: string; markdown: string }>> {
-  const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
-  if (!FIRECRAWL_API_KEY) {
-    console.log('FIRECRAWL_API_KEY not configured, skipping web search');
-    return [];
-  }
+  apiKey: string,
+): Promise<Array<{ url: string; title: string; snippet: string; markdown: string; similarity: number }>> {
   try {
-    const query = `${userQuery} site:hzau.edu.cn`;
-    const res = await fetch('https://api.firecrawl.dev/v2/search', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query,
-        limit: 3,
-        lang: 'zh',
-        country: 'cn',
-        scrapeOptions: { formats: ['markdown'], onlyMainContent: true },
-      }),
+    const vec = await embedQuery(userQuery, apiKey);
+    if (!vec) return [];
+    const { data, error } = await supabase.rpc("match_web_knowledge", {
+      query_embedding: vec,
+      match_threshold: 0.4,
+      match_count: 3,
     });
-    if (!res.ok) {
-      console.error('Firecrawl search failed:', res.status, await res.text().catch(() => ''));
+    if (error) {
+      console.error("webKnowledgeSearch RPC error:", error);
       return [];
     }
-    const json = await res.json();
-    const items: any[] = json?.data?.web || json?.data || [];
-    const results = items
-      .filter((it) => typeof it?.url === 'string' && it.url.includes('hzau.edu.cn'))
-      .slice(0, 3)
-      .map((it) => {
-        const md: string = it.markdown || it.description || '';
-        return {
-          url: it.url as string,
-          title: (it.title || it.url) as string,
-          snippet: md.replace(/\s+/g, ' ').substring(0, 200),
-          markdown: md.substring(0, 2000),
-        };
-      });
-    console.log(`Firecrawl HZAU search returned ${results.length} results`);
-    return results;
+    return (data || []).map((w: any) => ({
+      url: w.url,
+      title: w.title,
+      snippet: (w.summary || w.content || "").substring(0, 200).replace(/\s+/g, " "),
+      markdown: (w.content || "").substring(0, 2000),
+      similarity: w.similarity ?? 0.6,
+    }));
   } catch (e) {
-    console.error('webSearchHZAU error:', e);
+    console.error("webKnowledgeSearch error:", e);
     return [];
   }
 }
+
 
 // Get knowledge context - hybrid: TF-IDF keyword search + chunk-level vector search, fused via RRF
 async function getKnowledgeContext(
@@ -408,15 +390,14 @@ async function getKnowledgeContext(
 ): Promise<{ context: string; sources: Array<{ fileName: string; similarity: number; tags: string[]; id: string; index?: number; snippet?: string; url?: string }> }> {
 
   try {
-    // Decide whether to invoke HZAU web search (it's slow ~2-5s; only run when relevant)
-    const needsWeb = /华农|华中农业|hzau|官网|官方|通知|公告|招生|校历|学校|招办|教务/i.test(userQuery);
-
-    // Run keyword + vector channels in parallel; web search only if relevant
+    // Run keyword + vector + cached web knowledge channels in parallel.
+    // Cached web lookup hits a local pgvector index (fast); no on-the-fly Firecrawl.
     const [keywordResults, vectorChunks, webResults] = await Promise.all([
       keywordSearch(supabase, userQuery),
       vectorSearch(supabase, userQuery, apiKey),
-      needsWeb ? webSearchHZAU(userQuery) : Promise.resolve([] as Awaited<ReturnType<typeof webSearchHZAU>>),
+      webKnowledgeSearch(supabase, userQuery, apiKey),
     ]);
+
 
 
 
@@ -509,14 +490,14 @@ async function getKnowledgeContext(
         return `【来源[${index + 1}]: ${m.file_name}】${tags} ${scoreLabel}\n${body}`;
       });
 
-      // Append HZAU web sources (continue index numbering)
+      // Append cached HZAU web sources (continue index numbering)
       const baseIdx = sources.length;
       webResults.forEach((w, i) => {
         const idx = baseIdx + i + 1;
         sources.push({
           id: `web:${w.url}`,
           fileName: `[华农官网] ${w.title}`,
-          similarity: Math.max(0.55, 0.85 - i * 0.1),
+          similarity: Math.min(0.95, Math.max(0.5, w.similarity)),
           tags: ['华中农业大学', '官方网站'],
           index: idx,
           snippet: w.snippet,
@@ -526,8 +507,12 @@ async function getKnowledgeContext(
       });
 
       return {
-        context: `\n\n以下是与问题最相关的内容（含知识库语义+关键词融合检索，以及华中农业大学官方网站检索）：\n\n${contents.join('\n\n---\n\n')}`,
-    // No fused knowledge matches: only return web results (if any). Never fabricate fallback sources.
+        context: `\n\n以下是与问题最相关的内容（知识库语义+关键词融合检索，并含华农官网缓存）：\n\n${contents.join('\n\n---\n\n')}`,
+        sources,
+      };
+    }
+
+    // No knowledge base matches: only return cached web results if any. Never fabricate fallback sources.
     if (webResults.length > 0) {
       const webSources: any[] = [];
       const webContents: string[] = [];
@@ -536,7 +521,7 @@ async function getKnowledgeContext(
         webSources.push({
           id: `web:${w.url}`,
           fileName: `[华农官网] ${w.title}`,
-          similarity: Math.max(0.55, 0.85 - i * 0.1),
+          similarity: Math.min(0.95, Math.max(0.5, w.similarity)),
           tags: ['华中农业大学', '官方网站'],
           index: idx,
           snippet: w.snippet,
@@ -545,23 +530,19 @@ async function getKnowledgeContext(
         webContents.push(`【来源[${idx}]: ${w.title}】[来自华中农业大学官网: ${w.url}]\n${w.markdown}`);
       });
       return {
-        context: `\n\n以下是来自华中农业大学官方网站的相关内容：\n\n${webContents.join('\n\n---\n\n')}`,
+        context: `\n\n以下是来自华中农业大学官方网站缓存的相关内容：\n\n${webContents.join('\n\n---\n\n')}`,
         sources: webSources,
       };
     }
 
-    console.log("No matches found in knowledge base or web");
-    return { context: '', sources: [] };
-
-      };
-    }
-
+    console.log("No matches found in knowledge base or web cache");
     return { context: '', sources: [] };
   } catch (e) {
     console.error("Error in getKnowledgeContext:", e);
     return { context: '', sources: [] };
   }
 }
+
 
 
 serve(async (req) => {
@@ -613,9 +594,26 @@ serve(async (req) => {
       fileContext = `\n\n用户上传的文件内容：\n${fileContents.join('\n\n---\n\n')}`;
     }
 
-    // Get knowledge base context using keyword search
+    // Get knowledge base context using hybrid search
     const { context: knowledgeContext, sources } = await getKnowledgeContext(supabase, latestUserMessage, LOVABLE_API_KEY);
     console.log("Knowledge context length:", knowledgeContext.length, "Sources:", sources.length);
+
+    // Log knowledge gaps when we couldn't find anything relevant (fire-and-forget)
+    if (sources.length === 0 && latestUserMessage && latestUserMessage.length >= 4) {
+      const reason = "no_match";
+      (async () => {
+        try {
+          await supabase.rpc("log_knowledge_gap", {
+            _query: latestUserMessage.substring(0, 500),
+            _user_id: auth.userId ?? null,
+            _reason: reason,
+          });
+        } catch (e) {
+          console.error("log_knowledge_gap failed:", e);
+        }
+      })();
+    }
+
 
     // Build system prompt with file context if present
     let systemPrompt = `你是一位友善、专业的校园AI辅导员。
@@ -666,7 +664,7 @@ ${fileContext}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
@@ -674,10 +672,10 @@ ${fileContext}`;
         stream: true,
         max_tokens: 2048,
       }),
-        model: "google/gemini-2.5-flash",
-
+    });
 
     if (!response.ok) {
+
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
       
