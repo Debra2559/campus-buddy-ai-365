@@ -82,66 +82,69 @@ function ChatMessageComponent({ message, previousUserContent, onToggleFavorite, 
     return null;
   }
 
-  // Render citation markers like [1], [2] as styled badges
+  // Render citation markers like [1], [2] as styled badges.
+  // If a citation has no matching source, strip it out so users never see
+  // dangling, non-clickable [n] tokens in the text.
   const renderCitations = (children: React.ReactNode): React.ReactNode => {
-    if (!hasSources) return children;
-    
     return React.Children.map(children, (child) => {
       if (typeof child !== 'string') return child;
-      
+
       // Split text by citation patterns like [1], [2][3], etc.
       const parts = child.split(/(\[\d+\])/g);
       if (parts.length === 1) return child;
-      
+
       return parts.map((part, i) => {
         const match = part.match(/^\[(\d+)\]$/);
         if (match) {
           const num = parseInt(match[1]);
           const source = message.sources?.find(s => s.index === num);
-          if (source) {
-            return (
-              <HoverCard key={i} openDelay={200} closeDelay={100}>
-                <HoverCardTrigger asChild>
-                  <button
-                    onClick={() => setShowSources(true)}
-                    className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded bg-primary/15 text-primary hover:bg-primary/25 transition-colors cursor-pointer align-super ml-0.5 mr-0.5 leading-none"
-                  >
-                    {num}
-                  </button>
-                </HoverCardTrigger>
-                <HoverCardContent side="top" className="w-72 p-3" align="center">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-[10px] font-bold text-primary">{num}</span>
-                      </div>
-                      <span className="text-sm font-medium truncate">{source.fileName}</span>
-                      <span className={cn(
-                        "text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto",
-                        source.similarity >= 0.9
-                          ? "bg-green-500/10 text-green-600"
-                          : source.similarity >= 0.7
-                            ? "bg-primary/10 text-primary"
-                            : "bg-muted text-muted-foreground"
-                      )}>
-                        {(source.similarity * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    {source.snippet && (
-                      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4 border-l-2 border-primary/20 pl-2">
-                        {source.snippet}
-                      </p>
-                    )}
-                  </div>
-                </HoverCardContent>
-              </HoverCard>
-            );
+          if (!source) {
+            // No source backs this marker — hide it entirely.
+            return null;
           }
+          return (
+            <HoverCard key={i} openDelay={200} closeDelay={100}>
+              <HoverCardTrigger asChild>
+                <button
+                  onClick={() => setShowSources(true)}
+                  className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded bg-primary/15 text-primary hover:bg-primary/25 transition-colors cursor-pointer align-super ml-0.5 mr-0.5 leading-none"
+                >
+                  {num}
+                </button>
+              </HoverCardTrigger>
+              <HoverCardContent side="top" className="w-72 p-3" align="center">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[10px] font-bold text-primary">{num}</span>
+                    </div>
+                    <span className="text-sm font-medium truncate">{source.fileName}</span>
+                    <span className={cn(
+                      "text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto",
+                      source.similarity >= 0.9
+                        ? "bg-green-500/10 text-green-600"
+                        : source.similarity >= 0.7
+                          ? "bg-primary/10 text-primary"
+                          : "bg-muted text-muted-foreground"
+                    )}>
+                      {(source.similarity * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  {source.snippet && (
+                    <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4 border-l-2 border-primary/20 pl-2">
+                      {source.snippet}
+                    </p>
+                  )}
+                </div>
+              </HoverCardContent>
+            </HoverCard>
+          );
         }
         return part;
       });
     });
   };
+
 
   const handlePlayTTS = () => {
     // Check if browser supports speech synthesis
