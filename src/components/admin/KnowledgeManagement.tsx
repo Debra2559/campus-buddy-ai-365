@@ -446,13 +446,19 @@ export const KnowledgeManagement = () => {
               filePath: safeFilePath,
               fileName: file.name,
             },
-          }).then(({ error: parseError }) => {
+          }).then(({ data: parseData, error: parseError }) => {
             if (parseError) {
               console.error('Parse error:', parseError);
               toast({
                 variant: 'destructive',
                 title: '文档解析失败',
                 description: `${file.name} 解析失败，请稍后重试`,
+              });
+            } else if (parseData?.duplicate) {
+              toast({
+                variant: 'destructive',
+                title: '检测到重复内容',
+                description: `${file.name} 与已有文件 "${parseData.duplicateOf}" 内容相同，已自动过滤`,
               });
             } else {
               toast({
@@ -462,6 +468,7 @@ export const KnowledgeManagement = () => {
             }
             fetchFiles();
           });
+
         }
         
         // For text files, trigger embedding generation
