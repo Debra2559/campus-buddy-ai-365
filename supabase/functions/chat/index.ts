@@ -567,6 +567,7 @@ ${fileContext}`;
           ...messages,
         ],
         stream: true,
+        max_tokens: 2048,
       }),
     });
 
@@ -611,10 +612,10 @@ ${fileContext}`;
       })();
     }
 
-    // Create a TransformStream to inject sources at the end
+    // Create a TransformStream to inject sources at the start, so citations can render while streaming
     const sourcesData = sources.length > 0 ? JSON.stringify(sources) : null;
     
-    // If we have sources, we need to append them to the stream
+    // If we have sources, prepend them without waiting for the AI stream to finish
     if (sourcesData && response.body) {
       const reader = response.body.getReader();
       const encoder = new TextEncoder();
@@ -622,12 +623,10 @@ ${fileContext}`;
       const stream = new ReadableStream({
         async start(controller) {
           try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ sources })}\n\n`));
             while (true) {
               const { done, value } = await reader.read();
               if (done) {
-                // Append sources as a special event before [DONE]
-                const sourcesEvent = `data: ${JSON.stringify({ sources })}\n\n`;
-                controller.enqueue(encoder.encode(sourcesEvent));
                 break;
               }
               controller.enqueue(value);
