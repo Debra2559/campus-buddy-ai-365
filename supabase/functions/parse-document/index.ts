@@ -261,8 +261,32 @@ serve(async (req) => {
     const ext = fileName.split('.').pop()?.toLowerCase();
     
     let extractedText = '';
-    
+
     console.log(`Extracting text from ${ext} file...`);
+
+    switch (ext) {
+      case 'docx':
+        extractedText = await extractTextFromDocx(arrayBuffer);
+        break;
+      case 'pptx':
+        extractedText = await extractTextFromPptx(arrayBuffer);
+        break;
+      case 'pdf':
+        extractedText = await extractTextFromPdf(arrayBuffer);
+        break;
+      case 'md':
+      case 'txt':
+      case 'markdown':
+        extractedText = new TextDecoder('utf-8').decode(arrayBuffer);
+        break;
+      default:
+        try {
+          extractedText = new TextDecoder('utf-8').decode(arrayBuffer);
+        } catch {
+          throw new Error(`Unsupported file type: ${ext}`);
+        }
+    }
+
     // Truncate if too long (max 50000 characters)
     const maxLength = 50000;
     if (extractedText.length > maxLength) {
@@ -280,7 +304,6 @@ serve(async (req) => {
       contentHash = Array.from(new Uint8Array(hashBuf))
         .map(b => b.toString(16).padStart(2, '0')).join('');
 
-      // Check for duplicate content (excluding self)
       const { data: dup } = await supabase
         .from('knowledge_files')
         .select('id, file_name')
@@ -291,7 +314,6 @@ serve(async (req) => {
 
       if (dup) {
         console.log(`Duplicate detected: ${dup.file_name} (id=${dup.id})`);
-        // Remove the new upload (DB row + storage file)
         await supabase.storage.from('knowledge').remove([filePath]).catch(() => {});
         await supabase.from('knowledge_files').delete().eq('id', fileId);
         return new Response(
@@ -311,18 +333,9 @@ serve(async (req) => {
       content_text: extractedText,
       content_hash: contentHash,
       status: extractedText.length > 0 ? 'ready' : 'error',
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
-    }
-
-    // Truncate if too long (max 50000 characters)
-    const maxLength = 50000;
-    if (extractedText.length > maxLength) {
-      extractedText = extractedText.substring(0, maxLength) + '\n\n[内容已截断...]';
-    }
-
-    console.log(`Extracted ${extractedText.length} characters from ${fileName}`);
 
     // Update database with extracted text
     const updateData: any = { 
