@@ -334,7 +334,7 @@ async function vectorSearch(
     if (!vec) return [];
     const { data, error } = await supabase.rpc("match_knowledge_chunks", {
       query_embedding: vec,
-      match_threshold: 0.25,
+      match_threshold: 0.35,
       match_count: 12,
     });
     if (error) {
