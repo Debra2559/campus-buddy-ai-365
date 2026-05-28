@@ -313,6 +313,7 @@ export type Database = {
       knowledge_files: {
         Row: {
           category_id: string | null
+          content_hash: string | null
           content_text: string | null
           created_at: string
           embedding: string | null
@@ -329,6 +330,7 @@ export type Database = {
         }
         Insert: {
           category_id?: string | null
+          content_hash?: string | null
           content_text?: string | null
           created_at?: string
           embedding?: string | null
@@ -345,6 +347,7 @@ export type Database = {
         }
         Update: {
           category_id?: string | null
+          content_hash?: string | null
           content_text?: string | null
           created_at?: string
           embedding?: string | null
