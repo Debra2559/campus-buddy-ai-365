@@ -65,7 +65,9 @@ function ChatMessageComponent({ message, previousUserContent, onToggleFavorite, 
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   
-  const hasSources = message.sources && message.sources.length > 0;
+  // Hide sources when assistant explicitly says it found no information
+  const isNoInfoReply = !isUser && /没有找到相关信息|未找到相关信息|没有相关信息/.test(message.content);
+  const hasSources = !isNoInfoReply && message.sources && message.sources.length > 0;
   const isCurrentlyStreaming = isStreaming && message.id.startsWith('temp-');
 
   // Parse suggested queries from message content
