@@ -712,6 +712,8 @@ ${fileContext}`;
       // Log usage in background (fire and forget)
       (async () => {
         for (const source of sources) {
+          if (typeof source.id !== 'string' || source.id.startsWith('web:')) continue;
+
           try {
             await supabase.from('knowledge_usage').insert({
               file_id: source.id,
