@@ -674,7 +674,8 @@ ${fileContext}`;
         stream: true,
         max_tokens: 2048,
       }),
-    });
+        model: "google/gemini-2.5-flash",
+
 
     if (!response.ok) {
       const errorText = await response.text();
