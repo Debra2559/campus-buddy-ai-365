@@ -349,18 +349,72 @@ async function vectorSearch(
   }
 }
 
+// Search HZAU official websites via Firecrawl, return scraped markdown snippets
+async function webSearchHZAU(
+  userQuery: string,
+): Promise<Array<{ url: string; title: string; snippet: string; markdown: string }>> {
+  const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
+  if (!FIRECRAWL_API_KEY) {
+    console.log('FIRECRAWL_API_KEY not configured, skipping web search');
+    return [];
+  }
+  try {
+    const query = `${userQuery} site:hzau.edu.cn`;
+    const res = await fetch('https://api.firecrawl.dev/v2/search', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        limit: 3,
+        lang: 'zh',
+        country: 'cn',
+        scrapeOptions: { formats: ['markdown'], onlyMainContent: true },
+      }),
+    });
+    if (!res.ok) {
+      console.error('Firecrawl search failed:', res.status, await res.text().catch(() => ''));
+      return [];
+    }
+    const json = await res.json();
+    const items: any[] = json?.data?.web || json?.data || [];
+    const results = items
+      .filter((it) => typeof it?.url === 'string' && it.url.includes('hzau.edu.cn'))
+      .slice(0, 3)
+      .map((it) => {
+        const md: string = it.markdown || it.description || '';
+        return {
+          url: it.url as string,
+          title: (it.title || it.url) as string,
+          snippet: md.replace(/\s+/g, ' ').substring(0, 200),
+          markdown: md.substring(0, 2000),
+        };
+      });
+    console.log(`Firecrawl HZAU search returned ${results.length} results`);
+    return results;
+  } catch (e) {
+    console.error('webSearchHZAU error:', e);
+    return [];
+  }
+}
+
 // Get knowledge context - hybrid: TF-IDF keyword search + chunk-level vector search, fused via RRF
 async function getKnowledgeContext(
   supabase: any,
   userQuery: string,
   apiKey: string,
-): Promise<{ context: string; sources: Array<{ fileName: string; similarity: number; tags: string[]; id: string; index?: number; snippet?: string }> }> {
+): Promise<{ context: string; sources: Array<{ fileName: string; similarity: number; tags: string[]; id: string; index?: number; snippet?: string; url?: string }> }> {
+
   try {
-    // Run both channels in parallel
-    const [keywordResults, vectorChunks] = await Promise.all([
+    // Run keyword + vector channels AND HZAU web search in parallel
+    const [keywordResults, vectorChunks, webResults] = await Promise.all([
       keywordSearch(supabase, userQuery),
       vectorSearch(supabase, userQuery, apiKey),
+      webSearchHZAU(userQuery),
     ]);
+
 
     // ---- RRF fusion at file level ----
     // For vector channel, aggregate chunks per file: take best chunk per file as the file's hit.
@@ -451,9 +505,24 @@ async function getKnowledgeContext(
         return `【来源[${index + 1}]: ${m.file_name}】${tags} ${scoreLabel}\n${body}`;
       });
 
+      // Append HZAU web sources (continue index numbering)
+      const baseIdx = sources.length;
+      webResults.forEach((w, i) => {
+        const idx = baseIdx + i + 1;
+        sources.push({
+          id: `web:${w.url}`,
+          fileName: `[华农官网] ${w.title}`,
+          similarity: Math.max(0.55, 0.85 - i * 0.1),
+          tags: ['华中农业大学', '官方网站'],
+          index: idx,
+          snippet: w.snippet,
+          url: w.url,
+        } as any);
+        contents.push(`【来源[${idx}]: ${w.title}】[来自华中农业大学官网: ${w.url}]\n${w.markdown}`);
+      });
 
       return {
-        context: `\n\n以下是与问题最相关的知识库片段（已做语义+关键词融合检索）：\n\n${contents.join('\n\n---\n\n')}`,
+        context: `\n\n以下是与问题最相关的内容（含知识库语义+关键词融合检索，以及华中农业大学官方网站检索）：\n\n${contents.join('\n\n---\n\n')}`,
         sources,
       };
     }
@@ -461,19 +530,37 @@ async function getKnowledgeContext(
     // Fallback: get recent knowledge files
     console.log("No fused matches, using fallback");
     const fallbackKnowledge = await getFallbackKnowledge(supabase, 3);
-    if (fallbackKnowledge.length > 0) {
-      const contents = fallbackKnowledge.map(r => {
-        const tags = r.tags?.length > 0 ? `[标签: ${r.tags.join(', ')}]` : '';
-        const truncated = r.content_text.length > 2000
-          ? r.content_text.substring(0, 2000) + '...'
-          : r.content_text;
-        return `【${r.file_name}】${tags} [参考资料]\n${truncated}`;
+    const fallbackSources: any[] = fallbackKnowledge.map((r, i) => ({
+      id: r.id, fileName: r.file_name, similarity: 0.5, tags: r.tags || [], index: i + 1,
+    }));
+    const fallbackContents: string[] = fallbackKnowledge.map((r, i) => {
+      const tags = r.tags?.length > 0 ? `[标签: ${r.tags.join(', ')}]` : '';
+      const truncated = r.content_text.length > 2000
+        ? r.content_text.substring(0, 2000) + '...'
+        : r.content_text;
+      return `【来源[${i + 1}]: ${r.file_name}】${tags} [参考资料]\n${truncated}`;
+    });
+
+    // Append HZAU web sources here too
+    const baseIdx2 = fallbackSources.length;
+    webResults.forEach((w, i) => {
+      const idx = baseIdx2 + i + 1;
+      fallbackSources.push({
+        id: `web:${w.url}`,
+        fileName: `[华农官网] ${w.title}`,
+        similarity: Math.max(0.55, 0.85 - i * 0.1),
+        tags: ['华中农业大学', '官方网站'],
+        index: idx,
+        snippet: w.snippet,
+        url: w.url,
       });
+      fallbackContents.push(`【来源[${idx}]: ${w.title}】[来自华中农业大学官网: ${w.url}]\n${w.markdown}`);
+    });
+
+    if (fallbackSources.length > 0) {
       return {
-        context: `\n\n以下是知识库中的参考资料（供参考）：\n\n${contents.join('\n\n---\n\n')}`,
-        sources: fallbackKnowledge.map(r => ({
-          id: r.id, fileName: r.file_name, similarity: 0.5, tags: r.tags || [],
-        })),
+        context: `\n\n以下是参考资料（知识库片段 + 华中农业大学官方网站检索）：\n\n${fallbackContents.join('\n\n---\n\n')}`,
+        sources: fallbackSources,
       };
     }
 
@@ -483,6 +570,7 @@ async function getKnowledgeContext(
     return { context: '', sources: [] };
   }
 }
+
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -624,6 +712,8 @@ ${fileContext}`;
       // Log usage in background (fire and forget)
       (async () => {
         for (const source of sources) {
+          if (typeof source.id !== 'string' || source.id.startsWith('web:')) continue;
+
           try {
             await supabase.from('knowledge_usage').insert({
               file_id: source.id,

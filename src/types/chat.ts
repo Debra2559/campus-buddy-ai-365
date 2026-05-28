@@ -4,7 +4,9 @@ export interface KnowledgeSource {
   tags?: string[];
   index?: number;
   snippet?: string;
+  url?: string;
 }
+
 
 export interface Message {
   id: string;
