@@ -44,8 +44,19 @@ async function firecrawlSearchHZAU(topic: string, apiKey: string) {
     console.error("Firecrawl search failed", res.status, await res.text().catch(() => ""));
     return [];
   }
-  const json = await res.json();
-  const items: any[] = json?.data?.web || json?.data || [];
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // Allow admins to trigger; allow scheduled cron via shared secret in X-Cron-Secret header
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  const providedCron = req.headers.get("x-cron-secret");
+  const isCron = cronSecret && providedCron === cronSecret;
+  if (!isCron) {
+    const auth = await requireAdmin(req, corsHeaders);
+    if (!auth.ok) return auth.response!;
+  }
+
+
   return items.filter((it) => typeof it?.url === "string" && it.url.includes("hzau.edu.cn"));
 }
 
