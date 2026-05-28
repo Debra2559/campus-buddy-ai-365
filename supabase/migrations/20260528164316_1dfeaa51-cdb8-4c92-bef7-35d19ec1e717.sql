@@ -1,0 +1,1 @@
+UPDATE auth.users SET aud='authenticated' WHERE email IN ('tenghuijin@163.com','test666@test.com') AND (aud IS NULL OR aud='');
