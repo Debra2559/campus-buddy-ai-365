@@ -8,10 +8,12 @@ import { DataManagement } from '@/components/admin/DataManagement';
 import { FeedbackManagement } from '@/components/admin/FeedbackManagement';
 import { RoleManagement } from '@/components/admin/RoleManagement';
 import { KnowledgeManagement } from '@/components/admin/KnowledgeManagement';
+import { WebCacheManagement } from '@/components/admin/WebCacheManagement';
+import { KnowledgeGapsManagement } from '@/components/admin/KnowledgeGapsManagement';
 import { NotificationSettings } from '@/components/admin/NotificationSettings';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 
-const VALID_TABS = ['users', 'data', 'feedback', 'knowledge', 'notifications', 'roles'];
+const VALID_TABS = ['users', 'data', 'feedback', 'knowledge', 'webcache', 'gaps', 'notifications', 'roles'];
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -77,6 +79,10 @@ const Admin = () => {
         return <FeedbackManagement />;
       case 'knowledge':
         return <KnowledgeManagement />;
+      case 'webcache':
+        return <WebCacheManagement />;
+      case 'gaps':
+        return <KnowledgeGapsManagement />;
       case 'notifications':
         return <NotificationSettings />;
       case 'roles':
@@ -85,7 +91,6 @@ const Admin = () => {
         return <UserManagement />;
     }
   };
-
   return (
     <div className="flex min-h-screen bg-background">
       <AdminSidebar
