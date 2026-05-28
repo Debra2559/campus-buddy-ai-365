@@ -253,27 +253,31 @@ async function keywordSearch(
           .sort((a, b) => b.weight - a.weight)
           .map(d => `${d.keyword}(${d.weight.toFixed(1)})`)
           .join(', ');
-        
+
         results.push({
           id: file.id,
           file_name: file.file_name,
           content_text: file.content_text,
           tags: file.tags || [],
           score,
-          similarity: 0, // Will be normalized later
+          similarity: 0, // Will be calibrated later
           matchDetails,
-        });
+          coverage: matchedKeywords.length / Math.max(1, topKeywords.length),
+        } as any);
       }
     }
 
     // Sort by score descending
     results.sort((a, b) => b.score - a.score);
-    
-    // Normalize scores to similarity (0-1)
+
+    // Calibrate scores to similarity (conservative, coverage-weighted)
     const maxScore = results.length > 0 ? results[0].score : 1;
-    for (const result of results) {
-      result.similarity = normalizeScore(result.score, maxScore);
+    for (const result of results as any[]) {
+      result.similarity = calibratedKeywordSimilarity(result.score, maxScore, result.coverage ?? 0);
     }
+    // Drop low-confidence results to avoid 30%+ noise
+    const filtered = (results as any[]).filter(r => r.similarity >= 0.25);
+
     
     console.log(`Keyword search found ${results.length} matching files`);
     if (results.length > 0) {
