@@ -423,7 +423,8 @@ function ChatMessageComponent({ message, previousUserContent, onToggleFavorite, 
                 })}
               </div>
             )}
-
+          </div>
+        )}
 
 
         {!isUser && (
