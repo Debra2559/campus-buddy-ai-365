@@ -1,6 +1,6 @@
 // Scheduled / on-demand crawler for HZAU (华中农业大学) official sites.
-// Uses Firecrawl /v2/search to find recent pages on hzau.edu.cn for a set of
-// curated topics, then embeds + upserts them into public.web_knowledge.
+// Uses Firecrawl /v2/search to find pages on hzau.edu.cn for curated topics,
+// then embeds + upserts them into public.web_knowledge.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { embedBatch } from "../_shared/embeddings.ts";
@@ -8,10 +8,9 @@ import { requireAdmin } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 
-// Topics to cover. Crawling these covers most everyday student questions.
 const DEFAULT_TOPICS = [
   "招生 简章 录取",
   "就业 实习 招聘",
@@ -28,10 +27,7 @@ const DEFAULT_TOPICS = [
 async function firecrawlSearchHZAU(topic: string, apiKey: string) {
   const res = await fetch("https://api.firecrawl.dev/v2/search", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       query: `${topic} site:hzau.edu.cn`,
       limit: 5,
@@ -44,10 +40,15 @@ async function firecrawlSearchHZAU(topic: string, apiKey: string) {
     console.error("Firecrawl search failed", res.status, await res.text().catch(() => ""));
     return [];
   }
+  const json = await res.json();
+  const items: any[] = json?.data?.web || json?.data || [];
+  return items.filter((it) => typeof it?.url === "string" && it.url.includes("hzau.edu.cn"));
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  // Allow admins to trigger; allow scheduled cron via shared secret in X-Cron-Secret header
+  // Admin user OR cron with shared secret
   const cronSecret = Deno.env.get("CRON_SECRET");
   const providedCron = req.headers.get("x-cron-secret");
   const isCron = cronSecret && providedCron === cronSecret;
@@ -55,13 +56,6 @@ serve(async (req) => {
     const auth = await requireAdmin(req, corsHeaders);
     if (!auth.ok) return auth.response!;
   }
-
-
-  return items.filter((it) => typeof it?.url === "string" && it.url.includes("hzau.edu.cn"));
-}
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -77,7 +71,6 @@ serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
-  // Allow caller to override topics (e.g., from admin panel)
   let topics = DEFAULT_TOPICS;
   try {
     const body = await req.json().catch(() => ({}));
@@ -88,7 +81,6 @@ serve(async (req) => {
 
   console.log(`Starting HZAU crawl for ${topics.length} topics`);
 
-  // Collect all unique URLs first
   const collected = new Map<string, { url: string; title: string; markdown: string; topic: string }>();
   for (const topic of topics) {
     try {
@@ -113,12 +105,11 @@ serve(async (req) => {
   console.log(`Collected ${pages.length} unique pages`);
 
   if (pages.length === 0) {
-    return new Response(JSON.stringify({ ok: true, crawled: 0 }), {
+    return new Response(JSON.stringify({ ok: true, crawled: 0, upserted: 0 }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  // Embed all in one batch (chunked internally)
   const embeddings = await embedBatch(
     pages.map((p) => `${p.title}\n${p.markdown}`.slice(0, 7800)),
     lovableKey,
