@@ -997,7 +997,7 @@ export const KnowledgeManagement = () => {
                   {isDragging ? '释放以上传文件' : '拖拽文件到此处上传'}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  或点击选择文件 · 支持 PDF、Word、PPT、Markdown、TXT
+                  或点击选择文件 · 支持 PDF、Word、PPT、Excel、Markdown、TXT、ZIP（自动解压）
                 </p>
               </div>
             </div>
