@@ -336,14 +336,6 @@ serve(async (req) => {
       updated_at: new Date().toISOString(),
     };
 
-
-    // Update database with extracted text
-    const updateData: any = { 
-      content_text: extractedText,
-      status: extractedText.length > 0 ? 'ready' : 'error',
-      updated_at: new Date().toISOString()
-    };
-
     const { error: updateError } = await supabase
       .from('knowledge_files')
       .update(updateData)
