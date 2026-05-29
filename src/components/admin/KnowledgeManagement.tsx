@@ -952,7 +952,7 @@ export const KnowledgeManagement = () => {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept={ALLOWED_EXTENSIONS.join(',')}
+                accept={[...ALLOWED_EXTENSIONS, '.zip'].join(',')}
                 onChange={handleFileSelect}
                 className="hidden"
               />
