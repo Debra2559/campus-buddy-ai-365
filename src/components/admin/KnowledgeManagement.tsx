@@ -542,7 +542,7 @@ export const KnowledgeManagement = () => {
             const ext = '.' + name.split('.').pop()?.toLowerCase();
             if (!ALLOWED_EXTENSIONS.includes(ext)) { skipped++; continue; }
             const blob = await entry.async('blob');
-            out.push(new File([blob], name, { type: blob.type }));
+            out.push(new window.File([blob], name, { type: blob.type }));
             added++;
           }
           toast({
