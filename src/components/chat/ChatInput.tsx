@@ -1,5 +1,6 @@
 import { useState, useRef, useImperativeHandle, forwardRef, useEffect, useCallback } from 'react';
 import { Send, Paperclip, X, FileText, Image as ImageIcon, Camera, Plus } from 'lucide-react';
+import JSZip from 'jszip';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { quickTags } from '@/data/campusData';
@@ -77,9 +78,38 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
       fileInputRef.current?.click();
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const CHAT_ALLOWED_EXT = ['pdf','doc','docx','ppt','pptx','xls','xlsx','txt','md','csv','json','png','jpg','jpeg','gif','webp'];
+
+    const expandZips = async (files: File[]): Promise<File[]> => {
+      const out: File[] = [];
+      for (const f of files) {
+        const lower = f.name.toLowerCase();
+        if (lower.endsWith('.zip') || f.type === 'application/zip' || f.type === 'application/x-zip-compressed') {
+          try {
+            const zip = await JSZip.loadAsync(f);
+            for (const entry of Object.values(zip.files)) {
+              if (entry.dir) continue;
+              const name = entry.name.split('/').pop() || entry.name;
+              if (name.startsWith('.') || name.startsWith('__MACOSX')) continue;
+              const ext = name.split('.').pop()?.toLowerCase() || '';
+              if (!CHAT_ALLOWED_EXT.includes(ext)) continue;
+              const blob = await entry.async('blob');
+              out.push(new window.File([blob], name, { type: blob.type }));
+            }
+          } catch (err) {
+            console.error('zip extract error', err);
+          }
+        } else {
+          out.push(f);
+        }
+      }
+      return out;
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files || []);
-      const newFiles: UploadedFile[] = files.map(file => {
+      const expanded = await expandZips(files);
+      const newFiles: UploadedFile[] = expanded.map(file => {
         const uploadedFile: UploadedFile = { file };
         if (file.type.startsWith('image/')) {
           uploadedFile.preview = URL.createObjectURL(file);
@@ -178,7 +208,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.json"
+            accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.json,.zip"
             onChange={handleFileChange}
             className="hidden"
           />
@@ -259,7 +289,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.json"
+              accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.json,.zip"
               onChange={handleFileChange}
               className="hidden"
             />
