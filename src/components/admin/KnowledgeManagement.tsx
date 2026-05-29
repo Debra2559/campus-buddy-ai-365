@@ -997,7 +997,7 @@ export const KnowledgeManagement = () => {
                   {isDragging ? '释放以上传文件' : '拖拽文件到此处上传'}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  或点击选择文件 · 支持 PDF、Word、PPT、Markdown、TXT
+                  或点击选择文件 · 支持 PDF、Word、PPT、Excel、Markdown、TXT、ZIP（自动解压）
                 </p>
               </div>
             </div>
@@ -1035,7 +1035,7 @@ export const KnowledgeManagement = () => {
           <div className="mb-4 p-4 bg-muted/50 rounded-lg space-y-3">
             <div>
               <p className="text-sm text-muted-foreground">
-                支持的文件格式：PDF、Word文档(.docx)、PPT(.pptx)、Excel(.xlsx)、Markdown(.md)、文本文件(.txt)
+                支持的文件格式：PDF、Word文档(.docx)、PPT(.pptx)、Excel(.xlsx)、Markdown(.md)、文本文件(.txt)、压缩包(.zip，自动解压内部文件)
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 推荐标签：政策法规、学业指导、心理健康、就业指导、校园生活、行政服务
