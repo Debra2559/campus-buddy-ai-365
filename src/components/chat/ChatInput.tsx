@@ -208,7 +208,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.json"
+            accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.json,.zip"
             onChange={handleFileChange}
             className="hidden"
           />
@@ -289,7 +289,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.json"
+              accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.json,.zip"
               onChange={handleFileChange}
               className="hidden"
             />
