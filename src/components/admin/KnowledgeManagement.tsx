@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import JSZip from 'jszip';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -525,10 +526,46 @@ export const KnowledgeManagement = () => {
     }
   };
 
+  // Expand zip archives into their contained allowed files
+  const expandZips = async (input: File[]): Promise<File[]> => {
+    const out: File[] = [];
+    for (const f of input) {
+      const lower = f.name.toLowerCase();
+      if (lower.endsWith('.zip') || f.type === 'application/zip' || f.type === 'application/x-zip-compressed') {
+        try {
+          const zip = await JSZip.loadAsync(f);
+          const entries = Object.values(zip.files).filter(e => !e.dir);
+          let added = 0, skipped = 0;
+          for (const entry of entries) {
+            const name = entry.name.split('/').pop() || entry.name;
+            if (name.startsWith('.') || name.startsWith('__MACOSX')) continue;
+            const ext = '.' + name.split('.').pop()?.toLowerCase();
+            if (!ALLOWED_EXTENSIONS.includes(ext)) { skipped++; continue; }
+            const blob = await entry.async('blob');
+            out.push(new window.File([blob], name, { type: blob.type }));
+            added++;
+          }
+          toast({
+            title: `已解压 ${f.name}`,
+            description: `提取 ${added} 个文件${skipped > 0 ? `，跳过 ${skipped} 个不支持的文件` : ''}`,
+          });
+        } catch (err) {
+          console.error('Zip extract error:', err);
+          toast({ variant: 'destructive', title: '压缩包解压失败', description: f.name });
+        }
+      } else {
+        out.push(f);
+      }
+    }
+    return out;
+  };
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = event.target.files;
     if (!selectedFiles || selectedFiles.length === 0) return;
-    await processFiles(selectedFiles);
+    const expanded = await expandZips(Array.from(selectedFiles));
+    if (expanded.length > 0) await processFiles(expanded);
+    event.target.value = '';
   };
 
   // Drag and drop handlers
@@ -541,7 +578,6 @@ export const KnowledgeManagement = () => {
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only set isDragging to false if we're leaving the drop zone entirely
     if (e.currentTarget === e.target) {
       setIsDragging(false);
     }
@@ -559,9 +595,11 @@ export const KnowledgeManagement = () => {
 
     const droppedFiles = e.dataTransfer.files;
     if (droppedFiles && droppedFiles.length > 0) {
-      await processFiles(droppedFiles);
+      const expanded = await expandZips(Array.from(droppedFiles));
+      if (expanded.length > 0) await processFiles(expanded);
     }
   };
+
 
   const handleDelete = async (file: KnowledgeFile) => {
     try {
@@ -914,7 +952,7 @@ export const KnowledgeManagement = () => {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept={ALLOWED_EXTENSIONS.join(',')}
+                accept={[...ALLOWED_EXTENSIONS, '.zip'].join(',')}
                 onChange={handleFileSelect}
                 className="hidden"
               />
