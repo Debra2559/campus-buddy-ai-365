@@ -127,7 +127,9 @@ export function parseOptions(
       continue;
     }
 
-    const reason = questionReason(captured);
+    const quotedExempt = isQuoted(captured);
+    const effectiveMax = quotedExempt ? 120 : maxLen;
+    const reason = questionReason(captured, quotedExempt);
     if (reason) {
       pushFiltered(trimmed, reason, `提取: "${captured}"`);
       continue;
@@ -136,8 +138,8 @@ export function parseOptions(
       pushFiltered(trimmed, 'too-short', `提取: "${captured}"`);
       continue;
     }
-    if (captured.length > maxLen) {
-      pushFiltered(trimmed, 'exceeds-max-length', `${captured.length} > ${maxLen}`);
+    if (captured.length > effectiveMax) {
+      pushFiltered(trimmed, 'exceeds-max-length', `${captured.length} > ${effectiveMax}`);
       continue;
     }
     options.push({ label: captured });
