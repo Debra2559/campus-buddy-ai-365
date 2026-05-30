@@ -80,6 +80,21 @@ describe('parseOptions', () => {
     const r = parseOptions(['1. 保研/考研（深造科研路）', '2. 直接就业（早日步入社会）'].join('\n'));
     expect(r.map(o => o.label)).toEqual(['保研/考研（深造科研路）', '直接就业（早日步入社会）']);
   });
+
+  it('parses same-line options separated by Chinese punctuation', () => {
+    const r = parseOptions('你的毕业打算是？A. 保研/考研，B. 直接就业，C. 出国留学，D. 还没想好');
+    expect(r.map(o => o.label)).toEqual(['保研/考研', '直接就业', '出国留学', '还没想好']);
+  });
+
+  it('parses same-line options containing 打算', () => {
+    const r = parseOptions('1、打算保研/考研；2、打算直接就业；3、打算出国留学；4、还没打算好');
+    expect(r.map(o => o.label)).toEqual(['打算保研/考研', '打算直接就业', '打算出国留学', '还没打算好']);
+  });
+
+  it('does not treat the current career greeting as options', () => {
+    const r = parseOptions('请问你现在是华中农业大学哪个专业、哪个年级的学生？毕业后大致是打算保研、考研、就业还是留学呢？');
+    expect(r).toEqual([]);
+  });
 });
 
 describe('parseOptions debug', () => {
