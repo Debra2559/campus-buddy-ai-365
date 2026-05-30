@@ -39,7 +39,7 @@ function questionReason(text: string): FilterReason | null {
 }
 
 const stripEmoji = (text: string) =>
-  text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim();
+  text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u200D]/gu, '').trim();
 
 const REASON_LABEL: Record<FilterReason, string> = {
   'too-long': '行内文本超过 35 字',
