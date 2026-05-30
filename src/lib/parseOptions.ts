@@ -29,14 +29,22 @@ const isDev = (() => {
 })();
 
 // Return the reason a line looks like a question/prompt rather than an option, or null.
-function questionReason(text: string): FilterReason | null {
-  if (text.length > 35) return 'too-long';
-  if (/[?？]/.test(text)) return 'has-question-mark';
+// When `quotedExempt` is true, the text is wrapped in quotes (示例对白) so we skip
+// the question-mark / length checks — the question mark belongs to the quoted dialog,
+// not to the prompt itself.
+function questionReason(text: string, quotedExempt = false): FilterReason | null {
+  if (!quotedExempt && text.length > 35) return 'too-long';
+  if (!quotedExempt && /[?？]/.test(text)) return 'has-question-mark';
   if (/[:：]\s*$/.test(text)) return 'ends-with-colon';
-  if (/[:：].*[\u4e00-\u9fa5]/.test(text)) return 'colon-followed-by-chinese';
+  if (!quotedExempt && /[:：].*[\u4e00-\u9fa5]/.test(text)) return 'colon-followed-by-chinese';
   if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(text)) return 'prompt-keyword';
   return null;
 }
+
+// Detect if a label is wrapped in (Chinese or English) quotes — meaning it is
+// example dialog, not a direct question to the user.
+const isQuoted = (text: string) =>
+  /^[「""''""『]/.test(text.trim()) && /[」""''""』]\s*$/.test(text.trim());
 
 const stripEmoji = (text: string) =>
   text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u200D]/gu, '').trim();
