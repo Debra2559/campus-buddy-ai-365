@@ -34,7 +34,7 @@ function questionReason(text: string): FilterReason | null {
   if (/[?？]/.test(text)) return 'has-question-mark';
   if (/[:：]\s*$/.test(text)) return 'ends-with-colon';
   if (/[:：].*[\u4e00-\u9fa5]/.test(text)) return 'colon-followed-by-chinese';
-  if (/(想法是|打算|请选择|你目前|你的)/.test(text)) return 'prompt-keyword';
+  if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(text)) return 'prompt-keyword';
   return null;
 }
 
