@@ -25,10 +25,13 @@ export function useCareerConversation(userId: string | undefined) {
 
     (async () => {
       try {
-        // Find the most recent career conversation
+        // Find the most recent career conversation (filter by user_id explicitly —
+        // admins have a SELECT-all RLS policy, which would otherwise leak other
+        // users' career conversations into the current session).
         const { data: convs, error } = await supabase
           .from('conversations')
           .select('id')
+          .eq('user_id', userId)
           .eq('group_id', 'career')
           .order('updated_at', { ascending: false })
           .limit(1);
