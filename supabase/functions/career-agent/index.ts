@@ -266,9 +266,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  // 职业规划无需鉴权，匿名用户也可使用
 
-  const auth = await requireUser(req, corsHeaders);
-  if (!auth.ok) return auth.response!;
 
   try {
     const { messages } = await req.json();
