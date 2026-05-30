@@ -87,7 +87,7 @@ export function parseOptions(
     const trimmed = rawLine.trim();
     if (!trimmed) continue;
 
-    let match = trimmed.match(/^([A-Z])[.）、]\s*\*{0,2}(.+?)\*{0,2}$/);
+    let match = trimmed.match(/^([A-Z])[.．）、)]\s*\*{0,2}(.+?)\*{0,2}$/);
     let captured: string | null = null;
     let maxLen = 40;
 
@@ -95,17 +95,17 @@ export function parseOptions(
       captured = stripEmoji(match[2].replace(/\*{1,2}/g, '').trim());
       maxLen = 40;
     } else {
-      match = trimmed.match(/^\d+[.）、]\s*\*{0,2}(.+?)\*{0,2}$/);
+      match = trimmed.match(/^\d+[.．）、)]\s*\*{0,2}(.+?)\*{0,2}$/);
       if (match) {
         captured = stripEmoji(match[1].replace(/\*{1,2}/g, '').trim());
         maxLen = 35;
       }
     }
 
-    // If the captured text still contains an inline letter-option marker (e.g.
-    // "A. 打算考研 ... B. 打算就业"), the whole line is actually multiple inline
-    // options — skip and let the inline fallback handle it.
-    if (captured && /\s[A-Z][.．、)）]\s/.test(captured)) {
+    // If the captured text still contains an inline option marker (letter or
+    // digit), the whole line is actually multiple inline options — skip and
+    // let the inline fallback handle it.
+    if (captured && /\s(?:[A-Z]|\d+)[.．、)）]\s/.test(captured)) {
       captured = null;
     }
     if (captured === null) continue;
