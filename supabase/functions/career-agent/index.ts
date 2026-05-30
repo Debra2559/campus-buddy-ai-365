@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { requireUser } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -267,9 +266,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  // 职业规划无需鉴权，匿名用户也可使用
 
-  const auth = await requireUser(req, corsHeaders);
-  if (!auth.ok) return auth.response!;
 
   try {
     const { messages } = await req.json();
