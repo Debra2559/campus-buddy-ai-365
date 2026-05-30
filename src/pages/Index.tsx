@@ -261,7 +261,7 @@ const Index = () => {
         },
       });
     },
-    [activeConversationId, conversations, user, createConversation, addMessage, updateLocalMessage, isTyping, navigate]
+    [activeConversationId, conversations, user, createConversation, addMessage, updateLocalMessage, isTyping, navigate, setConversations]
   );
 
   // Auto-send pending message after login
