@@ -39,7 +39,7 @@ function questionReason(text: string): FilterReason | null {
 }
 
 const stripEmoji = (text: string) =>
-  text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim();
+  text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u200D]/gu, '').trim();
 
 const REASON_LABEL: Record<FilterReason, string> = {
   'too-long': '行内文本超过 35 字',
@@ -87,7 +87,7 @@ export function parseOptions(
     const trimmed = rawLine.trim();
     if (!trimmed) continue;
 
-    let match = trimmed.match(/^([A-Z])[.）、]\s*\*{0,2}(.+?)\*{0,2}$/);
+    let match = trimmed.match(/^([A-Z])[.．）、)]\s*\*{0,2}(.+?)\*{0,2}$/);
     let captured: string | null = null;
     let maxLen = 40;
 
@@ -95,17 +95,17 @@ export function parseOptions(
       captured = stripEmoji(match[2].replace(/\*{1,2}/g, '').trim());
       maxLen = 40;
     } else {
-      match = trimmed.match(/^\d+[.）、]\s*\*{0,2}(.+?)\*{0,2}$/);
+      match = trimmed.match(/^\d+[.．）、)]\s*\*{0,2}(.+?)\*{0,2}$/);
       if (match) {
         captured = stripEmoji(match[1].replace(/\*{1,2}/g, '').trim());
         maxLen = 35;
       }
     }
 
-    // If the captured text still contains an inline letter-option marker (e.g.
-    // "A. 打算考研 ... B. 打算就业"), the whole line is actually multiple inline
-    // options — skip and let the inline fallback handle it.
-    if (captured && /\s[A-Z][.．、)）]\s/.test(captured)) {
+    // If the captured text still contains an inline option marker (letter or
+    // digit), the whole line is actually multiple inline options — skip and
+    // let the inline fallback handle it.
+    if (captured && /\s(?:[A-Z]|\d+)[.．、)）]\s/.test(captured)) {
       captured = null;
     }
     if (captured === null) continue;
@@ -145,6 +145,23 @@ export function parseOptions(
     while ((m = inlineLetterRegex.exec(content)) !== null) {
       const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
       if (label.length >= 2 && label.length <= 40 && !questionReason(label)) {
+        inlineCandidates.push(label);
+      }
+    }
+    if (inlineCandidates.length >= 2) {
+      inlineCandidates.forEach((c) => options.push({ label: c }));
+    }
+  }
+
+  // Fallback 1b: digit-prefix markers on a single line, e.g.
+  //   "1. 打算考研 📚 2. 打算就业 💼 3. 打算留学 ✈️"
+  if (options.length === 0) {
+    const inlineDigitRegex = /(\d+)[.．、)）]\s*([^\n]+?)(?=\s+\d+[.．、)）]|$)/g;
+    let m: RegExpExecArray | null;
+    const inlineCandidates: string[] = [];
+    while ((m = inlineDigitRegex.exec(content)) !== null) {
+      const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
+      if (label.length >= 2 && label.length <= 35 && !questionReason(label)) {
         inlineCandidates.push(label);
       }
     }
