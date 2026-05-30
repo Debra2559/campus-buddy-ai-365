@@ -344,11 +344,9 @@ async function getFallbackKnowledge(
 // Vector-based search over knowledge_chunks (precision channel)
 async function vectorSearch(
   supabase: any,
-  query: string,
-  apiKey: string,
+  vec: number[] | null,
 ): Promise<Array<{ id: string; file_id: string; file_name: string; chunk_content: string; tags: string[]; similarity: number; chunk_index: number }>> {
   try {
-    const vec = await embedQuery(query, apiKey);
     if (!vec) return [];
     const { data, error } = await supabase.rpc("match_knowledge_chunks", {
       query_embedding: vec,
@@ -368,14 +366,11 @@ async function vectorSearch(
 }
 
 // Search cached HZAU web pages via vector similarity over public.web_knowledge.
-// Much faster than calling Firecrawl on each chat turn — the crawler keeps this table fresh.
 async function webKnowledgeSearch(
   supabase: any,
-  userQuery: string,
-  apiKey: string,
+  vec: number[] | null,
 ): Promise<Array<{ url: string; title: string; snippet: string; markdown: string; similarity: number }>> {
   try {
-    const vec = await embedQuery(userQuery, apiKey);
     if (!vec) return [];
     const { data, error } = await supabase.rpc("match_web_knowledge", {
       query_embedding: vec,
