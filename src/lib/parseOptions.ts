@@ -153,6 +153,23 @@ export function parseOptions(
     }
   }
 
+  // Fallback 1b: digit-prefix markers on a single line, e.g.
+  //   "1. 打算考研 📚 2. 打算就业 💼 3. 打算留学 ✈️"
+  if (options.length === 0) {
+    const inlineDigitRegex = /(\d+)[.．、)）]\s*([^\n]+?)(?=\s+\d+[.．、)）]|$)/g;
+    let m: RegExpExecArray | null;
+    const inlineCandidates: string[] = [];
+    while ((m = inlineDigitRegex.exec(content)) !== null) {
+      const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
+      if (label.length >= 2 && label.length <= 35 && !questionReason(label)) {
+        inlineCandidates.push(label);
+      }
+    }
+    if (inlineCandidates.length >= 2) {
+      inlineCandidates.forEach((c) => options.push({ label: c }));
+    }
+  }
+
   // Fallback 2: quoted inline candidates
   if (options.length === 0) {
     const inlinePattern = /[「""]([^「""」]{2,25})[」""]/g;
