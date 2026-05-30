@@ -13,6 +13,7 @@ export function useCareerConversation(userId: string | undefined) {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const assistantContentRef = useRef('');
   const hasGreeted = useRef(false);
+  const autoGreetInFlight = useRef(false);
 
   // Load existing career conversation on mount
   useEffect(() => {
@@ -207,71 +208,32 @@ export function useCareerConversation(userId: string | undefined) {
 
   // Auto-greet
   const autoGreet = useCallback(async () => {
-    if (hasGreeted.current) return;
+    if (hasGreeted.current || autoGreetInFlight.current) return;
+    autoGreetInFlight.current = true;
     hasGreeted.current = true;
 
     setIsLoading(true);
-    const greetMessages: Msg[] = [{ role: 'user', content: '你好，我想进行职业规划。' }];
+    const greeting = [
+      '同学你好！很高兴你能主动寻求职业规划服务，我是你的认证职业规划顾问。接下来我会和你一起探索优势、兴趣、价值观，并结合实际情况帮你找到更清晰的职业发展方向。',
+      '',
+      '我们先从基础画像开始：请告诉我你的专业、年级；毕业后的初步打算可以先选一个方向：',
+      '',
+      'A. 保研/考研',
+      'B. 直接就业',
+      'C. 出国留学',
+      'D. 考公/考编',
+      'E. 还没想好',
+    ].join('\n');
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const resp = await fetch(CAREER_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ messages: greetMessages }),
-      });
-
-      if (!resp.ok || !resp.body) throw new Error('AI服务暂时不可用');
-
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let textBuffer = '';
-      assistantContentRef.current = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        textBuffer += decoder.decode(value, { stream: true });
-
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (line.startsWith(':') || line.trim() === '') continue;
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              assistantContentRef.current += delta;
-              setMessages([{ role: 'assistant', content: assistantContentRef.current }]);
-            }
-          } catch {
-            textBuffer = line + '\n' + textBuffer;
-            break;
-          }
-        }
-      }
-
-      // Save greeting to DB
+      assistantContentRef.current = greeting;
+      setMessages([{ role: 'assistant', content: greeting }]);
       const convId = await ensureConversation();
-      if (convId && assistantContentRef.current) {
-        await saveMessage(convId, 'assistant', assistantContentRef.current);
-      }
+      if (convId) await saveMessage(convId, 'assistant', greeting);
     } catch {
-      const fallback = '你好！👋 我是你的职业规划助手，很高兴为你服务。先聊聊你的专业和兴趣吧，你目前学的什么专业呢？';
-      setMessages([{ role: 'assistant', content: fallback }]);
-      const convId = await ensureConversation();
-      if (convId) await saveMessage(convId, 'assistant', fallback);
+      setMessages([{ role: 'assistant', content: greeting }]);
     } finally {
+      autoGreetInFlight.current = false;
       setIsLoading(false);
     }
   }, [ensureConversation, saveMessage]);
