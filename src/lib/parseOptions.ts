@@ -118,7 +118,7 @@ export function parseOptions(
     // If the captured text still contains an inline option marker (letter or
     // digit), the whole line is actually multiple inline options — skip and
     // let the inline fallback handle it.
-    if (captured && /\s(?:[A-Z]|\d+)[.．、)）]\s/.test(captured)) {
+    if (captured && /(?:^|[\s、,，;；?？:：])(?:[A-Z]|\d+)[.．、)）]\s*/.test(captured)) {
       captured = null;
     }
     if (captured === null) continue;
@@ -165,7 +165,7 @@ export function parseOptions(
   // Split on letter-prefix markers and parse each segment.
   if (options.length === 0) {
     const inlineSource = content.replace(/\n+/g, ' ');
-    const inlineLetterRegex = /(?:^|[\s、,，;；])([A-Z])[.．、)）]\s*([\s\S]*?)(?=(?:[\s、,，;；]+[A-Z][.．、)）]\s*)|$)/g;
+    const inlineLetterRegex = /(?:^|[\s、,，;；?？:：])([A-Z])[.．、)）]\s*([\s\S]*?)(?=(?:[\s、,，;；?？:：]+[A-Z][.．、)）]\s*)|$)/g;
     let m: RegExpExecArray | null;
     const inlineCandidates: string[] = [];
     while ((m = inlineLetterRegex.exec(inlineSource)) !== null) {
@@ -186,7 +186,7 @@ export function parseOptions(
   //   "1. 打算考研 📚 2. 打算就业 💼 3. 打算留学 ✈️"
   if (options.length === 0) {
     const inlineSource = content.replace(/\n+/g, ' ');
-    const inlineDigitRegex = /(?:^|[\s、,，;；])(\d+)[.．、)）]\s*([\s\S]*?)(?=(?:[\s、,，;；]+\d+[.．、)）]\s*)|$)/g;
+    const inlineDigitRegex = /(?:^|[\s、,，;；?？:：])(\d+)[.．、)）]\s*([\s\S]*?)(?=(?:[\s、,，;；?？:：]+\d+[.．、)）]\s*)|$)/g;
     let m: RegExpExecArray | null;
     const inlineCandidates: string[] = [];
     while ((m = inlineDigitRegex.exec(inlineSource)) !== null) {
