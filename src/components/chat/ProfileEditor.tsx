@@ -229,14 +229,14 @@ export function ProfileEditor({
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({
+        .upsert({
+          user_id: userId,
           display_name: formData.displayName || null,
           avatar_url: formData.avatarUrl || null,
           college: formData.college || null,
           grade: formData.grade || null,
           updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId);
+        }, { onConflict: 'user_id' });
 
       if (error) throw error;
 
