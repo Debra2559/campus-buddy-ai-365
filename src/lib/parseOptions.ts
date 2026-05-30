@@ -158,6 +158,37 @@ export function parseOptions(
     }
   }
 
+  // Fallback 3: bold comma-separated items like **保研、考研、就业、留学**
+  // or **保研**、**考研**、**就业**、**留学**
+  if (options.length === 0) {
+    const candidates: string[] = [];
+    // Pattern A: single bold span with 、 separated items
+    const boldGroupRegex = /\*\*([^*\n]{2,60})\*\*/g;
+    let bm: RegExpExecArray | null;
+    while ((bm = boldGroupRegex.exec(content)) !== null) {
+      const inner = bm[1];
+      if (/[、,，]/.test(inner)) {
+        const parts = inner.split(/[、,，]/).map(s => stripEmoji(s.trim())).filter(Boolean);
+        if (parts.length >= 2 && parts.every(p => p.length >= 2 && p.length <= 12 && !questionReason(p))) {
+          parts.forEach(p => candidates.push(p));
+          break;
+        }
+      }
+    }
+    // Pattern B: multiple adjacent bold tokens separated by 、
+    if (candidates.length === 0) {
+      const seqRegex = /(\*\*[^*\n]{2,12}\*\*)(?:\s*[、,，]\s*\*\*[^*\n]{2,12}\*\*){1,}/g;
+      const seqMatch = seqRegex.exec(content);
+      if (seqMatch) {
+        const parts = seqMatch[0].split(/[、,，]/).map(s => stripEmoji(s.replace(/\*\*/g, '').trim())).filter(Boolean);
+        if (parts.length >= 2) parts.forEach(p => candidates.push(p));
+      }
+    }
+    if (candidates.length >= 2) {
+      candidates.forEach(c => options.push({ label: c }));
+    }
+  }
+
   logFiltered(debug);
 
   const result = options as ParsedOption[] & { debug?: ParseDebugEntry[] };
