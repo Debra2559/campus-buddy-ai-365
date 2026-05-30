@@ -43,7 +43,7 @@ function pickIcon(label: string, index: number) {
   return cycle[index % cycle.length];
 }
 
-function OptionButtons({ options, onSelect, disabled }: { options: ParsedOption[]; onSelect: (label: string) => void; disabled: boolean }) {
+function OptionButtons({ options, onSelect, disabled, answerPrefix = '' }: { options: ParsedOption[]; onSelect: (label: string) => void; disabled: boolean; answerPrefix?: string }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   if (options.length === 0) return null;
@@ -61,7 +61,7 @@ function OptionButtons({ options, onSelect, disabled }: { options: ParsedOption[
   const handleSubmit = () => {
     if (selected.size === 0 || disabled) return;
     const labels = Array.from(selected).sort().map(i => options[i].label);
-    onSelect(labels.join('、'));
+    onSelect(`${answerPrefix}${labels.join('、')}`);
     setSelected(new Set());
   };
 
@@ -339,9 +339,11 @@ export default function Career() {
               const displayContent = msg.role === 'assistant' ? getDisplayContent(msg.content) : msg.content;
               const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1 && !isLoading;
               const parsedOptions = isLastAssistant ? parseOptions(msg.content) : [];
-              const options = isLastAssistant && parsedOptions.length === 0 && /(专业|年级|保研|考研|就业|留学|打算)/.test(msg.content)
+              const isCareerDirectionQuestion = /(毕业后|去向|初步规划|初步打算|学业方向|保研|考研|就业|留学|考公|考编|还没想好)/.test(msg.content);
+              const options = isLastAssistant && parsedOptions.length === 0 && isCareerDirectionQuestion
                 ? CAREER_START_OPTIONS
                 : parsedOptions;
+              const shouldPrefixDirectionAnswer = isLastAssistant && isCareerDirectionQuestion && options.some(opt => /(保研|考研|就业|留学|考公|考编|还没想好)/.test(opt.label));
 
               return (
                 <div key={i} className="animate-fade-in">
@@ -391,7 +393,7 @@ export default function Career() {
                   </div>
                   {options.length > 0 && (
                     <div className="ml-11 mt-2">
-                      <OptionButtons options={options} onSelect={handleSend} disabled={isLoading} />
+                      <OptionButtons options={options} onSelect={handleSend} disabled={isLoading} answerPrefix={shouldPrefixDirectionAnswer ? '我的毕业去向/初步打算：' : ''} />
                     </div>
                   )}
                 </div>
