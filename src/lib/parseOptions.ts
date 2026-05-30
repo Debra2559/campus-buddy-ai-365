@@ -245,6 +245,27 @@ export function parseOptions(
     }
   }
 
+  // Fallback 4: natural-language alternatives, e.g.
+  // "是编程的逻辑性、解决问题的成就感，还是对前沿技术的好奇心？"
+  if (options.length === 0) {
+    const candidates: string[] = [];
+    const normalized = content.replace(/\s+/g, ' ');
+    const altSource = normalized.split(/[。！？?]/).reverse().find(part => /还是/.test(part) && !/(毕业后|初步打算|学业方向|保研|考研|就业|留学|哪个专业|哪个年级)/.test(part)) || '';
+    const altMatch = altSource.match(/是([^是？?。]{2,80}?)(?:，|,)?还是(.{2,40}?)(?:呢|吗|[?？。]|$)/);
+    if (altMatch) {
+      const parts = `${altMatch[1]}、${altMatch[2]}`
+        .split(/(?:、|，|,|；|;|或(?:者)?)/)
+        .map(part => cleanOptionLabel(part.replace(/^(更偏向|主要是|因为|对)/, '').replace(/的?呢$/, '')))
+        .filter(part => part.length >= 2 && part.length <= 18 && !/[?？。]/.test(part));
+      parts.forEach(part => {
+        if (!candidates.includes(part)) candidates.push(part);
+      });
+    }
+    if (candidates.length >= 2 && candidates.length <= 5) {
+      candidates.forEach(c => options.push({ label: c }));
+    }
+  }
+
   logFiltered(debug);
 
   const result = options as ParsedOption[] & { debug?: ParseDebugEntry[] };
