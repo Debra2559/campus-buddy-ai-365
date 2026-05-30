@@ -102,6 +102,14 @@ export function parseOptions(
       }
     }
 
+    // If the captured text still contains an inline letter-option marker (e.g.
+    // "A. 打算考研 ... B. 打算就业"), the whole line is actually multiple inline
+    // options — skip and let the inline fallback handle it.
+    if (captured && /\s[A-Z][.．、)）]\s/.test(captured)) {
+      captured = null;
+    }
+    if (captured === null) continue;
+
     if (captured === null) {
       // Only flag prose lines that look like they were *meant* to be options
       // (avoid spamming for empty/heading/markdown lines)
