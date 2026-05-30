@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useVerifiedProfile } from '@/hooks/useVerifiedProfile';
+import { useUserRole } from '@/hooks/useUserRole';
 
 function FullPageLoading({ label }: { label?: string }) {
   return (
@@ -18,14 +19,15 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading } = useVerifiedProfile(user?.id);
+  const { isAdmin, loading: roleLoading } = useUserRole(user?.id);
 
-  if (authLoading || profileLoading) return <FullPageLoading label="加载中..." />;
+  if (authLoading || profileLoading || roleLoading) return <FullPageLoading label="加载中..." />;
 
   if (!user) {
     return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
   }
 
-  if (!profile?.is_verified) {
+  if (!profile?.is_verified && !isAdmin) {
     return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
   }
 
