@@ -139,12 +139,12 @@ export function parseOptions(
       pushFiltered(trimmed, 'exceeds-max-length', `${captured.length} > ${effectiveMax}`);
       continue;
     }
-    if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(captured)) {
-      pushFiltered(trimmed, 'prompt-keyword', `提取: "${captured}"`);
-      continue;
-    }
     if (/[:：]\s*$/.test(captured)) {
       pushFiltered(trimmed, 'ends-with-colon', `提取: "${captured}"`);
+      continue;
+    }
+    if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(captured)) {
+      pushFiltered(trimmed, 'prompt-keyword', `提取: "${captured}"`);
       continue;
     }
     // Only enforce no-question-mark when label does NOT contain quoted dialog.
