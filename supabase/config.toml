@@ -1,1 +1,4 @@
 project_id = "hhpulhpxqgkdsltgjhpu"
+
+[functions.career-agent]
+verify_jwt = false
