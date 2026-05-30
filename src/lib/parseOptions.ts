@@ -47,7 +47,7 @@ const isQuoted = (text: string) =>
   /^[「""''""『]/.test(text.trim()) && /[」""''""』]\s*$/.test(text.trim());
 
 const stripEmoji = (text: string) =>
-  text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u200D]/gu, '').trim();
+  text.replace(/[\u{2300}-\u{23FF}\u{2460}-\u{24FF}\u{25A0}-\u{27BF}\u{2900}-\u{297F}\u{2B00}-\u{2BFF}\u{1F000}-\u{1FAFF}\uFE0F\u200D]/gu, '').trim();
 
 const REASON_LABEL: Record<FilterReason, string> = {
   'too-long': '行内文本超过 35 字',
