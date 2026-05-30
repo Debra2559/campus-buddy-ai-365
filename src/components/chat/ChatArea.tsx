@@ -140,9 +140,13 @@ export function ChatArea({
                 message.role === 'assistant'
                   ? [...messages.slice(0, index)].reverse().find((m) => m.role === 'user')?.content
                   : undefined;
+              // Use index-based key to keep the React identity stable when a
+              // temp id (temp-user-xxx / temp-ai-xxx) is swapped for the real
+              // DB id after persistence — otherwise the component remounts
+              // and the fade-in/pop-in animation replays, causing a visible flash.
               return (
                 <ChatMessage
-                  key={message.id}
+                  key={`${message.role}-${index}`}
                   message={message}
                   previousUserContent={previousUserContent}
                   onToggleFavorite={onToggleFavorite}
