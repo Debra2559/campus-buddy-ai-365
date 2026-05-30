@@ -13,6 +13,7 @@ export function useCareerConversation(userId: string | undefined) {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const assistantContentRef = useRef('');
   const hasGreeted = useRef(false);
+  const autoGreetInFlight = useRef(false);
 
   // Load existing career conversation on mount
   useEffect(() => {
@@ -207,7 +208,8 @@ export function useCareerConversation(userId: string | undefined) {
 
   // Auto-greet
   const autoGreet = useCallback(async () => {
-    if (hasGreeted.current) return;
+    if (hasGreeted.current || autoGreetInFlight.current) return;
+    autoGreetInFlight.current = true;
     hasGreeted.current = true;
 
     setIsLoading(true);
@@ -272,6 +274,7 @@ export function useCareerConversation(userId: string | undefined) {
       const convId = await ensureConversation();
       if (convId) await saveMessage(convId, 'assistant', fallback);
     } finally {
+      autoGreetInFlight.current = false;
       setIsLoading(false);
     }
   }, [ensureConversation, saveMessage]);
