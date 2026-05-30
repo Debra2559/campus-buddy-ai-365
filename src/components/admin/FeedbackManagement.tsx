@@ -285,7 +285,7 @@ export function FeedbackManagement() {
                   <TableHead className="whitespace-nowrap">类型</TableHead>
                   <TableHead className="whitespace-nowrap">状态</TableHead>
                   <TableHead className="whitespace-nowrap">用户</TableHead>
-                  <TableHead className="whitespace-nowrap">标签</TableHead>
+                  <TableHead className="whitespace-nowrap min-w-[200px]">标签</TableHead>
                   <TableHead className="min-w-[200px]">反馈内容</TableHead>
                   <TableHead className="min-w-[200px]">相关消息</TableHead>
                   <TableHead className="whitespace-nowrap">时间</TableHead>
@@ -319,7 +319,7 @@ export function FeedbackManagement() {
                       <TableCell className="font-medium text-sm whitespace-nowrap">
                         {feedback.user_display_name}
                       </TableCell>
-                      <TableCell className="min-w-[140px]">
+                      <TableCell className="min-w-[200px]">
                         {feedback.tags && feedback.tags.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {feedback.tags.map((tag) => (
@@ -327,7 +327,7 @@ export function FeedbackManagement() {
                                 key={tag} 
                                 variant="outline" 
                                 className={cn(
-                                  "text-[10px] px-1.5 py-0",
+                                  "text-[10px] px-1.5 py-0 whitespace-nowrap",
                                   feedback.feedback_type === 'positive' 
                                     ? "border-green-500/30 text-green-600 bg-green-500/10"
                                     : "border-red-500/30 text-red-600 bg-red-500/10"
