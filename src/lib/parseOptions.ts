@@ -127,19 +127,24 @@ export function parseOptions(
       continue;
     }
 
-    const quotedExempt = isQuoted(captured);
-    const effectiveMax = quotedExempt ? 120 : maxLen;
-    const reason = questionReason(captured, quotedExempt);
-    if (reason) {
-      pushFiltered(trimmed, reason, `提取: "${captured}"`);
-      continue;
-    }
+    // Strong signal: line starts with A./1./etc. — be permissive, only drop
+    // obvious prompts (ends with colon and no quoted dialog) or prompt keywords.
     if (captured.length < 2) {
       pushFiltered(trimmed, 'too-short', `提取: "${captured}"`);
       continue;
     }
-    if (captured.length > effectiveMax) {
-      pushFiltered(trimmed, 'exceeds-max-length', `${captured.length} > ${effectiveMax}`);
+    if (captured.length > 120) {
+      pushFiltered(trimmed, 'exceeds-max-length', `${captured.length} > 120`);
+      continue;
+    }
+    if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(captured)) {
+      pushFiltered(trimmed, 'prompt-keyword', `提取: "${captured}"`);
+      continue;
+    }
+    // Only drop ends-with-colon when there is no quoted dialog in the label
+    // (a bare prompt like "你的想法是：" is not an option).
+    if (/^[^「『""'']*[:：]\s*$/.test(captured)) {
+      pushFiltered(trimmed, 'ends-with-colon', `提取: "${captured}"`);
       continue;
     }
     options.push({ label: captured });
