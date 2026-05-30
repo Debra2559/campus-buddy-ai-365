@@ -29,14 +29,7 @@ const App = () => (
               </AuthRoute>
             }
           />
-          <Route
-            path="/career"
-            element={
-              <ProtectedRoute>
-                <Career />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/career" element={<Career />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/er-diagram" element={<ERDiagram />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

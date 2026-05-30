@@ -224,12 +224,7 @@ export default function Career() {
     return () => { if (reportBlobUrl) URL.revokeObjectURL(reportBlobUrl); };
   }, [reportBlobUrl]);
 
-  // Redirect to auth if not logged in
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate('/auth', { state: { from: '/career' } });
-    }
-  }, [authLoading, user, navigate]);
+  // Note: 不再强制跳转登录页；未登录用户也可浏览职业规划入口
 
   const handleSend = async (content: string) => {
     if (!content.trim() || isLoading) return;
