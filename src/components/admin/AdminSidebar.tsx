@@ -9,9 +9,7 @@ import {
   ArrowLeft,
   Settings,
   Menu,
-  X,
-  Globe,
-  AlertTriangle
+  X
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -27,8 +25,6 @@ const menuItems = [
   { id: 'data', label: '数据管理', icon: BarChart3 },
   { id: 'feedback', label: '反馈管理', icon: MessageSquare },
   { id: 'knowledge', label: '知识库', icon: BookOpen },
-  { id: 'webcache', label: '网页缓存', icon: Globe },
-  { id: 'gaps', label: '知识盲点', icon: AlertTriangle },
   { id: 'notifications', label: '通知设置', icon: Settings },
 ];
 
