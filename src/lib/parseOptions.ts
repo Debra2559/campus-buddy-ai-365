@@ -49,6 +49,11 @@ const isQuoted = (text: string) =>
 const stripEmoji = (text: string) =>
   text.replace(/[\u{2300}-\u{23FF}\u{2460}-\u{24FF}\u{25A0}-\u{27BF}\u{2900}-\u{297F}\u{2B00}-\u{2BFF}\u{1F000}-\u{1FAFF}\uFE0F\u200D]/gu, '').trim();
 
+const cleanOptionLabel = (text: string) =>
+  stripEmoji(text.replace(/\*{1,2}/g, ''))
+    .replace(/^[\s、,，;；]+|[\s、,，;；]+$/g, '')
+    .trim();
+
 const REASON_LABEL: Record<FilterReason, string> = {
   'too-long': '行内文本超过 35 字',
   'has-question-mark': '包含问号',
@@ -100,12 +105,12 @@ export function parseOptions(
     let maxLen = 40;
 
     if (match && match.length >= 3) {
-      captured = stripEmoji(match[2].replace(/\*{1,2}/g, '').trim());
+      captured = cleanOptionLabel(match[2]);
       maxLen = 40;
     } else {
       match = trimmed.match(/^\d+[.．）、)]\s*\*{0,2}(.+?)\*{0,2}$/);
       if (match) {
-        captured = stripEmoji(match[1].replace(/\*{1,2}/g, '').trim());
+        captured = cleanOptionLabel(match[1]);
         maxLen = 35;
       }
     }
@@ -159,11 +164,12 @@ export function parseOptions(
   //   "A. 直接就业 💼 B. 国内考研/保研 📚 C. 出国留学 ✈️ D. 考公 🏛️ E. 迷茫 😵"
   // Split on letter-prefix markers and parse each segment.
   if (options.length === 0) {
-    const inlineLetterRegex = /([A-Z])[.．、)）]\s*([^A-Z\n]+?)(?=\s+[A-Z][.．、)）]|$)/g;
+    const inlineSource = content.replace(/\n+/g, ' ');
+    const inlineLetterRegex = /(?:^|[\s、,，;；])([A-Z])[.．、)）]\s*([\s\S]*?)(?=(?:[\s、,，;；]+[A-Z][.．、)）]\s*)|$)/g;
     let m: RegExpExecArray | null;
     const inlineCandidates: string[] = [];
-    while ((m = inlineLetterRegex.exec(content)) !== null) {
-      const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
+    while ((m = inlineLetterRegex.exec(inlineSource)) !== null) {
+      const label = cleanOptionLabel(m[2]);
       // Strong signal (A./B./C. markers detected) — only drop on prompt-keyword
       // or pure ends-with-colon, allow long quoted dialog with question marks.
       if (label.length < 2 || label.length > 120) continue;
@@ -179,11 +185,12 @@ export function parseOptions(
   // Fallback 1b: digit-prefix markers on a single line, e.g.
   //   "1. 打算考研 📚 2. 打算就业 💼 3. 打算留学 ✈️"
   if (options.length === 0) {
-    const inlineDigitRegex = /(\d+)[.．、)）]\s*([^\n]+?)(?=\s+\d+[.．、)）]|$)/g;
+    const inlineSource = content.replace(/\n+/g, ' ');
+    const inlineDigitRegex = /(?:^|[\s、,，;；])(\d+)[.．、)）]\s*([\s\S]*?)(?=(?:[\s、,，;；]+\d+[.．、)）]\s*)|$)/g;
     let m: RegExpExecArray | null;
     const inlineCandidates: string[] = [];
-    while ((m = inlineDigitRegex.exec(content)) !== null) {
-      const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
+    while ((m = inlineDigitRegex.exec(inlineSource)) !== null) {
+      const label = cleanOptionLabel(m[2]);
       if (label.length < 2 || label.length > 120) continue;
       if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(label)) continue;
       if (/^[^「『""'']*[:：]\s*$/.test(label)) continue;
