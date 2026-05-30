@@ -103,6 +103,30 @@ function extractJobTitles(content: string): string[] {
   }
 }
 
+function detectCareerDirection(text: string): string | null {
+  const normalized = text.replace(/\s+/g, "");
+  const hasExplicitContext = /(毕业去向|初步打算|学业方向|毕业后|去向|打算)/.test(normalized);
+  if (/(保研|考研|读研|升学)/.test(normalized)) return "保研/考研";
+  if (/(直接就业|就业|工作|求职)/.test(normalized)) return "直接就业";
+  if (/(出国留学|留学|海外)/.test(normalized)) return "出国留学";
+  if (/(考公|考编|公务员|事业编)/.test(normalized)) return "考公/考编";
+  if (hasExplicitContext && /(还没想好|不确定|未定|迷茫)/.test(normalized)) return "还没想好";
+  return null;
+}
+
+function buildConfirmedInfoPrompt(messages: any[]): string {
+  const userMessages = Array.isArray(messages) ? messages.filter((m: any) => m?.role === "user") : [];
+  const direction = [...userMessages].reverse().map((m: any) => detectCareerDirection(String(m.content || ""))).find(Boolean);
+  if (!direction) return "";
+
+  return [
+    "## 已确认信息（最高优先级）",
+    `- 学生已确认毕业去向/初步打算：${direction}`,
+    "- 后续回复禁止再次询问、确认或提供“保研/考研、直接就业、出国留学、考公/考编、还没想好”等毕业去向选项。",
+    "- 如果还缺专业或年级，只问专业和年级；如果专业/年级也已有，则进入选择专业原因、专业满意度或下一模块。",
+  ].join("\n");
+}
+
 const SYSTEM_PROMPT = `你是一位持有GCDF（全球职业规划师）和BCC（认证职业教练）双认证的资深职业规划顾问，专门为华中农业大学学生提供深度职业测评与规划服务。
 
 ## 测评框架（共6大模块，8-12轮对话）
@@ -275,6 +299,7 @@ serve(async (req) => {
 
   try {
     const { messages } = await req.json();
+    const confirmedInfoPrompt = buildConfirmedInfoPrompt(messages);
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -288,6 +313,7 @@ serve(async (req) => {
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
+          ...(confirmedInfoPrompt ? [{ role: "system", content: confirmedInfoPrompt }] : []),
           ...messages,
         ],
         stream: true,
