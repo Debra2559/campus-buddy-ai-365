@@ -250,7 +250,8 @@ export function parseOptions(
   if (options.length === 0) {
     const candidates: string[] = [];
     const normalized = content.replace(/\s+/g, ' ');
-    const altMatch = normalized.match(/是(.{2,80}?)(?:，|,)?还是(.{2,40}?)(?:呢|吗|[?？。]|$)/);
+    const altSource = normalized.split(/[。！？?]/).reverse().find(part => /还是/.test(part) && !/(毕业后|初步打算|学业方向|保研|考研|就业|留学|哪个专业|哪个年级)/.test(part)) || '';
+    const altMatch = altSource.match(/是([^是？?。]{2,80}?)(?:，|,)?还是(.{2,40}?)(?:呢|吗|[?？。]|$)/);
     if (altMatch) {
       const parts = `${altMatch[1]}、${altMatch[2]}`
         .split(/(?:、|，|,|；|;|或(?:者)?)/)
