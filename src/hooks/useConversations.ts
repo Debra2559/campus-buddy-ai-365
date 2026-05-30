@@ -127,11 +127,16 @@ export function useConversations(userId: string | undefined) {
         sources,
       };
 
-      // Update conversation's updated_at
-      await supabase
+      // Update conversation's updated_at, but don't treat this as a send failure.
+      // The message insert above is the source of truth for whether sending worked.
+      const { error: updateError } = await supabase
         .from('conversations')
         .update({ updated_at: new Date().toISOString() })
         .eq('id', conversationId);
+
+      if (updateError) {
+        console.warn('Message saved, but conversation timestamp update failed:', updateError);
+      }
 
       setConversations((prev) =>
         prev.map((conv) =>
