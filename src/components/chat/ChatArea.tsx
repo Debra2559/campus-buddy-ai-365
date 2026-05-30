@@ -155,7 +155,7 @@ export function ChatArea({
               );
             })}
             {/* Show thinking indicator when waiting for AI response */}
-            {isTyping && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
+            {isTyping && (messages.length === 0 || messages[messages.length - 1].role === 'user') && (
               <ThinkingIndicator />
             )}
             <div ref={messagesEndRef} />
