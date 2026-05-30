@@ -154,7 +154,9 @@ export function parseOptions(
     const inlineCandidates: string[] = [];
     while ((m = inlineLetterRegex.exec(content)) !== null) {
       const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
-      if (label.length >= 2 && label.length <= 40 && !questionReason(label)) {
+      const quoted = isQuoted(label);
+      const maxL = quoted ? 120 : 40;
+      if (label.length >= 2 && label.length <= maxL && !questionReason(label, quoted)) {
         inlineCandidates.push(label);
       }
     }
@@ -171,7 +173,9 @@ export function parseOptions(
     const inlineCandidates: string[] = [];
     while ((m = inlineDigitRegex.exec(content)) !== null) {
       const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
-      if (label.length >= 2 && label.length <= 35 && !questionReason(label)) {
+      const quoted = isQuoted(label);
+      const maxL = quoted ? 120 : 35;
+      if (label.length >= 2 && label.length <= maxL && !questionReason(label, quoted)) {
         inlineCandidates.push(label);
       }
     }
