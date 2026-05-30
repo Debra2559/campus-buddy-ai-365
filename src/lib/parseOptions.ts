@@ -154,11 +154,12 @@ export function parseOptions(
     const inlineCandidates: string[] = [];
     while ((m = inlineLetterRegex.exec(content)) !== null) {
       const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
-      const quoted = isQuoted(label);
-      const maxL = quoted ? 120 : 40;
-      if (label.length >= 2 && label.length <= maxL && !questionReason(label, quoted)) {
-        inlineCandidates.push(label);
-      }
+      // Strong signal (A./B./C. markers detected) — only drop on prompt-keyword
+      // or pure ends-with-colon, allow long quoted dialog with question marks.
+      if (label.length < 2 || label.length > 120) continue;
+      if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(label)) continue;
+      if (/^[^「『""'']*[:：]\s*$/.test(label)) continue; // bare prompt ending with colon (no quotes)
+      inlineCandidates.push(label);
     }
     if (inlineCandidates.length >= 2) {
       inlineCandidates.forEach((c) => options.push({ label: c }));
@@ -173,11 +174,10 @@ export function parseOptions(
     const inlineCandidates: string[] = [];
     while ((m = inlineDigitRegex.exec(content)) !== null) {
       const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
-      const quoted = isQuoted(label);
-      const maxL = quoted ? 120 : 35;
-      if (label.length >= 2 && label.length <= maxL && !questionReason(label, quoted)) {
-        inlineCandidates.push(label);
-      }
+      if (label.length < 2 || label.length > 120) continue;
+      if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(label)) continue;
+      if (/^[^「『""'']*[:：]\s*$/.test(label)) continue;
+      inlineCandidates.push(label);
     }
     if (inlineCandidates.length >= 2) {
       inlineCandidates.forEach((c) => options.push({ label: c }));
