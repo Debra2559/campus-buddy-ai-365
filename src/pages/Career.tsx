@@ -24,6 +24,19 @@ const CAREER_START_OPTIONS: ParsedOption[] = [
   { label: '还没想好' },
 ];
 
+const detectConfirmedCareerDirection = (content: string) => {
+  const normalized = content.replace(/\s+/g, '');
+  const hasContext = /(毕业去向|初步打算|学业方向|毕业后|去向|打算)/.test(normalized);
+  if (/(保研|考研|读研|升学)/.test(normalized)) return '保研/考研';
+  if (/(直接就业|就业|工作|求职)/.test(normalized)) return '直接就业';
+  if (/(出国留学|留学|海外)/.test(normalized)) return '出国留学';
+  if (/(考公|考编|公务员|事业编)/.test(normalized)) return '考公/考编';
+  if (hasContext && /(还没想好|不确定|未定|迷茫)/.test(normalized)) return '还没想好';
+  return null;
+};
+
+const isCareerDirectionOption = (label: string) => /(保研|考研|就业|留学|考公|考编|还没想好)/.test(label);
+
 const OPTION_PALETTE = [
   { iconBg: 'bg-blue-50', iconText: 'text-blue-600', selectedBorder: 'border-blue-500', selectedDot: 'bg-blue-500 border-blue-500', hoverIconBg: 'group-hover:bg-blue-100' },
   { iconBg: 'bg-amber-50', iconText: 'text-amber-600', selectedBorder: 'border-amber-500', selectedDot: 'bg-amber-500 border-amber-500', hoverIconBg: 'group-hover:bg-amber-100' },
@@ -234,6 +247,11 @@ export default function Career() {
 
   // Note: 不再强制跳转登录页；未登录用户也可浏览职业规划入口
 
+  const confirmedCareerDirection = useMemo(
+    () => [...messages].reverse().find(msg => msg.role === 'user' && detectConfirmedCareerDirection(msg.content))?.content,
+    [messages]
+  );
+
   const handleSend = async (content: string) => {
     if (!content.trim() || isLoading) return;
     setInput('');
@@ -340,10 +358,11 @@ export default function Career() {
               const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1 && !isLoading;
               const parsedOptions = isLastAssistant ? parseOptions(msg.content) : [];
               const isCareerDirectionQuestion = /(毕业后|去向|初步规划|初步打算|学业方向|保研|考研|就业|留学|考公|考编|还没想好)/.test(msg.content);
-              const options = isLastAssistant && parsedOptions.length === 0 && isCareerDirectionQuestion
+              const rawOptions = isLastAssistant && parsedOptions.length === 0 && isCareerDirectionQuestion && !confirmedCareerDirection
                 ? CAREER_START_OPTIONS
                 : parsedOptions;
-              const shouldPrefixDirectionAnswer = isLastAssistant && isCareerDirectionQuestion && options.some(opt => /(保研|考研|就业|留学|考公|考编|还没想好)/.test(opt.label));
+              const options = confirmedCareerDirection && rawOptions.length > 0 && rawOptions.every(opt => isCareerDirectionOption(opt.label)) ? [] : rawOptions;
+              const shouldPrefixDirectionAnswer = isLastAssistant && !confirmedCareerDirection && isCareerDirectionQuestion && options.some(opt => isCareerDirectionOption(opt.label));
 
               return (
                 <div key={i} className="animate-fade-in">
