@@ -133,29 +133,45 @@ function segmentChinese(text: string): string[] {
   
   const results = new Set<string>();
   const cleanText = text.toLowerCase().replace(/[，。？！、；：""''（）【】《》\s]/g, '');
-  
+
   // First, extract known common terms
   for (const term of commonTerms) {
     if (cleanText.includes(term.toLowerCase())) {
       results.add(term.toLowerCase());
     }
   }
-  
+
+  // Characters used to split a Chinese sentence into meaningful fragments
+  // before n-gram extraction. Without this, queries like "校医院的电话是什么"
+  // generate noisy n-grams ("医院的", "院的", "的电", "话是"…) that dilute
+  // the coverage ratio and cause real matches like "校医院"/"电话" to be
+  // filtered out as low-confidence.
+  const splitChars = '的是在有和了我你他她它们这那什么怎么如何吗呢吧啊请能可以想要问关于哪些哪个为什么怎样还是或者但是因为所以如果虽然就是那么这个那个都是不是没有已经正在多少几个';
+  const splitRegex = new RegExp(`[${splitChars}]+`, 'g');
+
   // Then, use n-gram approach for Chinese characters (2-4 chars)
   // This helps catch terms not in our dictionary
   const chineseChars = cleanText.match(/[\u4e00-\u9fa5]+/g) || [];
-  for (const segment of chineseChars) {
-    // Extract 2-char, 3-char, and 4-char n-grams
-    for (let len = 2; len <= Math.min(4, segment.length); len++) {
-      for (let i = 0; i <= segment.length - len; i++) {
-        const ngram = segment.substring(i, i + len);
-        if (!stopWords.has(ngram)) {
-          results.add(ngram);
+  for (const block of chineseChars) {
+    // Split block into meaningful fragments around stopwords/particles
+    const fragments = block.split(splitRegex).filter(Boolean);
+    for (const segment of fragments) {
+      // Whole fragment is itself a strong term candidate
+      if (segment.length >= 2 && segment.length <= 8) {
+        results.add(segment);
+      }
+      // Extract 2-char, 3-char, and 4-char n-grams within the fragment
+      for (let len = 2; len <= Math.min(4, segment.length); len++) {
+        for (let i = 0; i <= segment.length - len; i++) {
+          const ngram = segment.substring(i, i + len);
+          if (!stopWords.has(ngram)) {
+            results.add(ngram);
+          }
         }
       }
     }
   }
-  
+
   // Also extract English words and numbers
   const englishWords = text.toLowerCase().match(/[a-z]+/gi) || [];
   for (const word of englishWords) {
@@ -163,7 +179,7 @@ function segmentChinese(text: string): string[] {
       results.add(word);
     }
   }
-  
+
   return Array.from(results);
 }
 
