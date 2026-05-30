@@ -667,13 +667,13 @@ ${fileContext}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
         ],
         stream: true,
-        max_tokens: 2048,
+        max_tokens: 4096,
       }),
     });
 
