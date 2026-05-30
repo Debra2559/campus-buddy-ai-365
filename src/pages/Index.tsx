@@ -135,13 +135,46 @@ const Index = () => {
         setIsTyping(true);
       }
 
-      // Add user message
-      const userMsg = await addMessage(targetConvId, 'user', messageContent);
-      if (!userMsg) {
-        toast.error('发送消息失败');
-        setIsTyping(false);
-        return;
-      }
+      // Optimistically add user message immediately so it appears before the thinking indicator
+      const tempUserId = `temp-user-${Date.now()}`;
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === targetConvId
+            ? {
+                ...conv,
+                messages: [
+                  ...conv.messages,
+                  {
+                    id: tempUserId,
+                    role: 'user',
+                    content: messageContent,
+                    timestamp: new Date(),
+                    isFavorite: false,
+                  },
+                ],
+                updatedAt: new Date(),
+              }
+            : conv
+        )
+      );
+
+      // Persist to database in background and swap temp id with real id
+      addMessage(targetConvId, 'user', messageContent).then((userMsg) => {
+        if (!userMsg) {
+          toast.error('发送消息失败');
+          return;
+        }
+        setConversations((prev) =>
+          prev.map((conv) => {
+            if (conv.id !== targetConvId) return conv;
+            const withoutDup = conv.messages.filter((m) => m.id !== userMsg.id);
+            return {
+              ...conv,
+              messages: withoutDup.map((m) => (m.id === tempUserId ? userMsg : m)),
+            };
+          })
+        );
+      });
 
       assistantContentRef.current = "";
       assistantSourcesRef.current = [];
