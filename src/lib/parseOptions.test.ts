@@ -95,6 +95,11 @@ describe('parseOptions', () => {
     const r = parseOptions('请问你现在是华中农业大学哪个专业、哪个年级的学生？毕业后大致是打算保研、考研、就业还是留学呢？');
     expect(r).toEqual([]);
   });
+
+  it('parses natural-language alternatives with 是/还是', () => {
+    const r = parseOptions('能具体说说你喜欢计算机科学与技术专业的哪些方面吗？是编程的逻辑性、解决问题的成就感，还是对前沿技术的好奇心？');
+    expect(r.map(o => o.label)).toEqual(['编程的逻辑性', '解决问题的成就感', '前沿技术的好奇心']);
+  });
 });
 
 describe('parseOptions debug', () => {
