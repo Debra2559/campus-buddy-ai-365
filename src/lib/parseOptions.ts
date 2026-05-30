@@ -127,6 +127,25 @@ export function parseOptions(
     options.push({ label: captured });
   }
 
+  // Fallback 1: options crammed onto a single line, e.g.
+  //   "A. 直接就业 💼 B. 国内考研/保研 📚 C. 出国留学 ✈️ D. 考公 🏛️ E. 迷茫 😵"
+  // Split on letter-prefix markers and parse each segment.
+  if (options.length === 0) {
+    const inlineLetterRegex = /([A-Z])[.．、)）]\s*([^A-Z\n]+?)(?=\s+[A-Z][.．、)）]|$)/g;
+    let m: RegExpExecArray | null;
+    const inlineCandidates: string[] = [];
+    while ((m = inlineLetterRegex.exec(content)) !== null) {
+      const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
+      if (label.length >= 2 && label.length <= 40 && !questionReason(label)) {
+        inlineCandidates.push(label);
+      }
+    }
+    if (inlineCandidates.length >= 2) {
+      inlineCandidates.forEach((c) => options.push({ label: c }));
+    }
+  }
+
+  // Fallback 2: quoted inline candidates
   if (options.length === 0) {
     const inlinePattern = /[「""]([^「""」]{2,25})[」""]/g;
     let inlineMatch: RegExpExecArray | null;
