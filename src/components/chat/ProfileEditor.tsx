@@ -229,14 +229,14 @@ export function ProfileEditor({
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({
+        .upsert({
+          user_id: userId,
           display_name: formData.displayName || null,
           avatar_url: formData.avatarUrl || null,
           college: formData.college || null,
           grade: formData.grade || null,
           updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId);
+        }, { onConflict: 'user_id' });
 
       if (error) throw error;
 
@@ -287,7 +287,7 @@ export function ProfileEditor({
           <div className="flex flex-col items-center gap-4">
             <div className="relative group">
               <Avatar className="w-24 h-24 ring-4 ring-primary/20">
-                <AvatarImage src={formData.avatarUrl} alt={name} />
+                <AvatarImage key={formData.avatarUrl} src={formData.avatarUrl} alt={name} />
                 <AvatarFallback className="gradient-primary text-white text-2xl font-semibold">
                   {name.charAt(0).toUpperCase()}
                 </AvatarFallback>
