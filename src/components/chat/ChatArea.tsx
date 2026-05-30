@@ -154,10 +154,16 @@ export function ChatArea({
                 />
               );
             })}
-            {/* Show thinking indicator when waiting for AI response */}
-            {isTyping && (messages.length === 0 || messages[messages.length - 1].role === 'user') && (
-              <ThinkingIndicator />
-            )}
+            {/* Thinking indicator: only shown strictly after a user message and before
+                the assistant's first streamed chunk arrives. Wrapped in a min-height
+                container so the swap to the assistant bubble doesn't cause jitter. */}
+            {isTyping &&
+              messages.length > 0 &&
+              messages[messages.length - 1].role === 'user' && (
+                <div className="min-h-[64px]">
+                  <ThinkingIndicator />
+                </div>
+              )}
             <div ref={messagesEndRef} />
           </div>
         )}
