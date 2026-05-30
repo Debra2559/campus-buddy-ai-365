@@ -403,12 +403,15 @@ async function getKnowledgeContext(
 ): Promise<{ context: string; sources: Array<{ fileName: string; similarity: number; tags: string[]; id: string; index?: number; snippet?: string; url?: string }> }> {
 
   try {
-    // Run keyword + vector + cached web knowledge channels in parallel.
-    // Cached web lookup hits a local pgvector index (fast); no on-the-fly Firecrawl.
+    // Compute query embedding once and reuse for both vector channels.
+    const queryVecPromise = embedQuery(userQuery, apiKey);
+    const keywordPromise = keywordSearch(supabase, userQuery);
+
+    const vec = await queryVecPromise;
     const [keywordResults, vectorChunks, webResults] = await Promise.all([
-      keywordSearch(supabase, userQuery),
-      vectorSearch(supabase, userQuery, apiKey),
-      webKnowledgeSearch(supabase, userQuery, apiKey),
+      keywordPromise,
+      vectorSearch(supabase, vec),
+      webKnowledgeSearch(supabase, vec),
     ]);
 
 
