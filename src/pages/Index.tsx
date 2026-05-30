@@ -116,47 +116,65 @@ const Index = () => {
 
       let targetConvId = activeConversationId;
       let currentConv = conversations.find(c => c.id === targetConvId);
+      const tempUserId = `temp-user-${Date.now()}`;
+      const optimisticUserMsg: Message = {
+        id: tempUserId,
+        role: 'user',
+        content: messageContent,
+        timestamp: new Date(),
+        isFavorite: false,
+      };
 
-      // If no active conversation, create one first
+      // If no active conversation, create a local optimistic one IMMEDIATELY
+      // so the UI never shows an empty/white state while awaiting the DB insert.
       if (!targetConvId) {
+        const tempConvId = `temp-conv-${Date.now()}`;
+        const optimisticConv: Conversation = {
+          id: tempConvId,
+          title: content.slice(0, 20) + (content.length > 20 ? '...' : ''),
+          messages: [optimisticUserMsg],
+          groupId: 'academic',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          isPinned: false,
+          folderId: null,
+        };
+        setConversations((prev) => [optimisticConv, ...prev]);
+        setActiveConversationId(tempConvId);
         setIsTyping(true);
+        currentConv = optimisticConv;
+        targetConvId = tempConvId;
+
+        // Persist conversation in background; swap temp id with real id.
         const newConv = await createConversation(
           content.slice(0, 20) + (content.length > 20 ? '...' : '')
         );
         if (!newConv) {
           toast.error('创建对话失败');
           setIsTyping(false);
+          setConversations((prev) => prev.filter((c) => c.id !== tempConvId));
+          setActiveConversationId(null);
           return;
         }
-        targetConvId = newConv.id;
+        setConversations((prev) =>
+          prev.map((c) => (c.id === tempConvId ? { ...c, id: newConv.id } : c))
+        );
         setActiveConversationId(newConv.id);
-        currentConv = newConv;
+        targetConvId = newConv.id;
       } else {
         setIsTyping(true);
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.id === targetConvId
+              ? {
+                  ...conv,
+                  messages: [...conv.messages, optimisticUserMsg],
+                  updatedAt: new Date(),
+                }
+              : conv
+          )
+        );
       }
-
-      // Optimistically add user message immediately so it appears before the thinking indicator
-      const tempUserId = `temp-user-${Date.now()}`;
-      setConversations((prev) =>
-        prev.map((conv) =>
-          conv.id === targetConvId
-            ? {
-                ...conv,
-                messages: [
-                  ...conv.messages,
-                  {
-                    id: tempUserId,
-                    role: 'user',
-                    content: messageContent,
-                    timestamp: new Date(),
-                    isFavorite: false,
-                  },
-                ],
-                updatedAt: new Date(),
-              }
-            : conv
-        )
-      );
 
       // Persist to database in background and swap temp id with real id
       addMessage(targetConvId, 'user', messageContent).then((userMsg) => {
