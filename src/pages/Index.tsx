@@ -156,9 +156,16 @@ const Index = () => {
           setActiveConversationId(null);
           return;
         }
-        setConversations((prev) =>
-          prev.map((c) => (c.id === tempConvId ? { ...c, id: newConv.id } : c))
-        );
+        // createConversation already appended a blank conv with the real id.
+        // Merge: drop that blank duplicate and rename the optimistic temp to the real id.
+        setConversations((prev) => {
+          const withoutBlankDup = prev.filter(
+            (c) => !(c.id === newConv.id && c.messages.length === 0)
+          );
+          return withoutBlankDup.map((c) =>
+            c.id === tempConvId ? { ...c, id: newConv.id } : c
+          );
+        });
         setActiveConversationId(newConv.id);
         targetConvId = newConv.id;
       } else {
