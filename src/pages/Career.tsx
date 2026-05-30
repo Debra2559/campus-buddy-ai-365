@@ -16,6 +16,14 @@ import aiTeacherAvatar from '@/assets/ai-teacher-avatar.png';
 type WebSource = { url: string; title: string; snippet: string };
 import { parseOptions, type ParsedOption } from '@/lib/parseOptions';
 
+const CAREER_START_OPTIONS: ParsedOption[] = [
+  { label: '保研/考研' },
+  { label: '直接就业' },
+  { label: '出国留学' },
+  { label: '考公/考编' },
+  { label: '还没想好' },
+];
+
 const OPTION_PALETTE = [
   { iconBg: 'bg-blue-50', iconText: 'text-blue-600', selectedBorder: 'border-blue-500', selectedDot: 'bg-blue-500 border-blue-500', hoverIconBg: 'group-hover:bg-blue-100' },
   { iconBg: 'bg-amber-50', iconText: 'text-amber-600', selectedBorder: 'border-amber-500', selectedDot: 'bg-amber-500 border-amber-500', hoverIconBg: 'group-hover:bg-amber-100' },
@@ -330,7 +338,10 @@ export default function Career() {
               const sources = webSources.get(i);
               const displayContent = msg.role === 'assistant' ? getDisplayContent(msg.content) : msg.content;
               const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1 && !isLoading;
-              const options = isLastAssistant ? parseOptions(msg.content) : [];
+              const parsedOptions = isLastAssistant ? parseOptions(msg.content) : [];
+              const options = isLastAssistant && parsedOptions.length === 0 && /(专业|年级|保研|考研|就业|留学|打算)/.test(msg.content)
+                ? CAREER_START_OPTIONS
+                : parsedOptions;
 
               return (
                 <div key={i} className="animate-fade-in">
