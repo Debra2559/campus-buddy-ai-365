@@ -80,7 +80,6 @@ export function ChatArea({
     }
   }, [isTyping, smoothScrollToBottom]);
   const showWelcome = messages.length === 0 && !isTyping;
-  const showLeadingThinking = isTyping && messages.length === 0;
 
   const handleTagClick = useCallback((text: string) => {
     chatInputRef.current?.fillInput(text);
