@@ -29,17 +29,25 @@ const isDev = (() => {
 })();
 
 // Return the reason a line looks like a question/prompt rather than an option, or null.
-function questionReason(text: string): FilterReason | null {
-  if (text.length > 35) return 'too-long';
-  if (/[?？]/.test(text)) return 'has-question-mark';
+// When `quotedExempt` is true, the text is wrapped in quotes (示例对白) so we skip
+// the question-mark / length checks — the question mark belongs to the quoted dialog,
+// not to the prompt itself.
+function questionReason(text: string, quotedExempt = false): FilterReason | null {
+  if (!quotedExempt && text.length > 35) return 'too-long';
+  if (!quotedExempt && /[?？]/.test(text)) return 'has-question-mark';
   if (/[:：]\s*$/.test(text)) return 'ends-with-colon';
-  if (/[:：].*[\u4e00-\u9fa5]/.test(text)) return 'colon-followed-by-chinese';
+  if (!quotedExempt && /[:：].*[\u4e00-\u9fa5]/.test(text)) return 'colon-followed-by-chinese';
   if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(text)) return 'prompt-keyword';
   return null;
 }
 
+// Detect if a label is wrapped in (Chinese or English) quotes — meaning it is
+// example dialog, not a direct question to the user.
+const isQuoted = (text: string) =>
+  /^[「""''""『]/.test(text.trim()) && /[」""''""』]\s*$/.test(text.trim());
+
 const stripEmoji = (text: string) =>
-  text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u200D]/gu, '').trim();
+  text.replace(/[\u{2300}-\u{23FF}\u{2460}-\u{24FF}\u{25A0}-\u{27BF}\u{2900}-\u{297F}\u{2B00}-\u{2BFF}\u{1F000}-\u{1FAFF}\uFE0F\u200D]/gu, '').trim();
 
 const REASON_LABEL: Record<FilterReason, string> = {
   'too-long': '行内文本超过 35 字',
@@ -119,17 +127,29 @@ export function parseOptions(
       continue;
     }
 
-    const reason = questionReason(captured);
-    if (reason) {
-      pushFiltered(trimmed, reason, `提取: "${captured}"`);
-      continue;
-    }
+    // Strong signal: line starts with A./1./etc. — be permissive when the
+    // label contains quoted dialog (示例对白), strict otherwise.
+    const hasQuotedDialog = /["「『'][^"」』']{2,}["」』']/.test(captured);
     if (captured.length < 2) {
       pushFiltered(trimmed, 'too-short', `提取: "${captured}"`);
       continue;
     }
-    if (captured.length > maxLen) {
-      pushFiltered(trimmed, 'exceeds-max-length', `${captured.length} > ${maxLen}`);
+    const effectiveMax = hasQuotedDialog ? 120 : maxLen;
+    if (captured.length > effectiveMax) {
+      pushFiltered(trimmed, 'exceeds-max-length', `${captured.length} > ${effectiveMax}`);
+      continue;
+    }
+    if (/[:：]\s*$/.test(captured)) {
+      pushFiltered(trimmed, 'ends-with-colon', `提取: "${captured}"`);
+      continue;
+    }
+    if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(captured)) {
+      pushFiltered(trimmed, 'prompt-keyword', `提取: "${captured}"`);
+      continue;
+    }
+    // Only enforce no-question-mark when label does NOT contain quoted dialog.
+    if (!hasQuotedDialog && /[?？]/.test(captured)) {
+      pushFiltered(trimmed, 'has-question-mark', `提取: "${captured}"`);
       continue;
     }
     options.push({ label: captured });
@@ -144,9 +164,12 @@ export function parseOptions(
     const inlineCandidates: string[] = [];
     while ((m = inlineLetterRegex.exec(content)) !== null) {
       const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
-      if (label.length >= 2 && label.length <= 40 && !questionReason(label)) {
-        inlineCandidates.push(label);
-      }
+      // Strong signal (A./B./C. markers detected) — only drop on prompt-keyword
+      // or pure ends-with-colon, allow long quoted dialog with question marks.
+      if (label.length < 2 || label.length > 120) continue;
+      if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(label)) continue;
+      if (/^[^「『""'']*[:：]\s*$/.test(label)) continue; // bare prompt ending with colon (no quotes)
+      inlineCandidates.push(label);
     }
     if (inlineCandidates.length >= 2) {
       inlineCandidates.forEach((c) => options.push({ label: c }));
@@ -161,9 +184,10 @@ export function parseOptions(
     const inlineCandidates: string[] = [];
     while ((m = inlineDigitRegex.exec(content)) !== null) {
       const label = stripEmoji(m[2].replace(/\*{1,2}/g, '').trim());
-      if (label.length >= 2 && label.length <= 35 && !questionReason(label)) {
-        inlineCandidates.push(label);
-      }
+      if (label.length < 2 || label.length > 120) continue;
+      if (/(想法是|请选择|你目前|你的打算|你的想法)/.test(label)) continue;
+      if (/^[^「『""'']*[:：]\s*$/.test(label)) continue;
+      inlineCandidates.push(label);
     }
     if (inlineCandidates.length >= 2) {
       inlineCandidates.forEach((c) => options.push({ label: c }));
